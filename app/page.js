@@ -1,18 +1,17 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import SplashScreen from '@/components/SplashScreen';
 import { 
   getHomeProducts, 
   getCart, 
-  addToCart, 
-  getStoreContent 
+  addToCart 
 } from '@/services/storeService';
 import { 
   Move, 
   Plus, 
-  ShieldCheck, 
   ChevronLeft, 
   ChevronRight, 
   Sparkles, 
@@ -21,28 +20,23 @@ import {
   Layers
 } from 'lucide-react';
 
-export default function HomePage() {
-  const [activeDept, setActiveDept] = useState('all'); // 'all' | 'men' | 'women' | 'kids' | 'sports'
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const deptFromUrl = searchParams.get('dept') || 'all';
+
+  const [activeDept, setActiveDept] = useState(deptFromUrl);
   const [products, setProducts] = useState([]);
   const [heroProduct, setHeroProduct] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [frameIndex, setFrameIndex] = useState(0);
   const [loadingAdd, setLoadingAdd] = useState(false);
-  const [heroContent, setHeroContent] = useState({
-    headline: 'AIR ZOOM ALPHA 26',
-    subheadline: 'ENGINEERED WITH FLYKNIT REBOUND & DUAL ZOOM AIR UNITS',
-    cta_text: 'DISCOVER COLLECTION',
-    cta_link: '/shop',
-    badge: 'SEASON DROP // TIER 04'
-  });
-
-  // Custom loadout interactive station
-  const [loadoutColor, setLoadoutColor] = useState('Crimson');
-  const [loadoutImg, setLoadoutImg] = useState('https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80');
-  const [loadoutSize, setLoadoutSize] = useState('10');
 
   const isDragging = useRef(false);
   const startX = useRef(0);
+
+  useEffect(() => {
+    setActiveDept(deptFromUrl);
+  }, [deptFromUrl]);
 
   useEffect(() => {
     async function loadData() {
@@ -59,9 +53,6 @@ export default function HomePage() {
         setHeroProduct(null);
         setSelectedVariant(null);
       }
-
-      const dynamicHero = await getStoreContent('homepage_hero');
-      if (dynamicHero) setHeroContent((prev) => ({ ...prev, ...dynamicHero }));
     }
 
     loadData();
@@ -108,7 +99,7 @@ export default function HomePage() {
       const { id: cartId } = await getCart();
       const variantToUse = selectedVariant || heroProduct.product_variants?.[0];
       await addToCart(cartId, variantToUse?.id, 1, heroProduct.id);
-      alert(`${heroProduct.name} (Size: ${variantToUse?.size || '10'}) added to your bag.`);
+      alert(`${heroProduct.name} (Size: ${variantToUse?.size || '10'}) added to bag.`);
     } catch (err) {
       alert(err.message || 'Error adding item to bag.');
     } finally {
@@ -120,35 +111,7 @@ export default function HomePage() {
     <div className="bg-white min-h-screen text-[#111111]">
       <SplashScreen />
 
-      {/* Top Department Navigation Bar */}
-      <div className="bg-[#111111] text-white px-6 h-12 flex items-center justify-between border-b border-white/10">
-        <div className="flex items-center gap-6 text-xs font-bold uppercase tracking-wider overflow-x-auto no-scrollbar">
-          {[
-            { id: 'all', label: 'All Releases' },
-            { id: 'men', label: 'Men' },
-            { id: 'women', label: 'Women' },
-            { id: 'kids', label: 'Kids' },
-            { id: 'sports', label: 'Sports & Performance' },
-            { id: 'sale', label: 'Sale' },
-          ].map((dept) => (
-            <button
-              key={dept.id}
-              onClick={() => setActiveDept(dept.id)}
-              className={`transition-colors whitespace-nowrap ${
-                activeDept === dept.id ? 'text-[#CCFF00] font-black' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {dept.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-gray-400">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#CCFF00]" /> ATHLETE PASSPORT V2.0
-        </div>
-      </div>
-
-      {/* 360° Hero Showcase */}
+      {/* 360° HERO SHOWCASE */}
       {heroProduct ? (
         <section id="hero-rotator" className="max-w-[1440px] mx-auto px-6 py-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
@@ -156,10 +119,10 @@ export default function HomePage() {
             <div className="lg:col-span-7 bg-[#F5F5F5] border border-[#E5E5E5] rounded-3xl p-6 relative flex flex-col justify-between shadow-sm">
               <div className="flex justify-between items-center z-10 mb-4">
                 <span className="text-[10px] font-bold tracking-widest text-[#111111] bg-white px-2.5 py-1 rounded border border-[#E5E5E5] uppercase font-mono flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3 text-black" /> 360° INSPECTION VIEWPORT
+                  <Sparkles className="w-3 h-3 text-black" /> 360° VIEWPORT
                 </span>
                 <span className="text-xs text-[#707072] flex items-center gap-1 font-medium">
-                  <Move className="w-3.5 h-3.5" /> Drag or use slider to rotate
+                  <Move className="w-3.5 h-3.5" /> Drag or use buttons to inspect
                 </span>
               </div>
 
@@ -239,7 +202,7 @@ export default function HomePage() {
                 </div>
 
                 <p className="text-xs text-[#707072] mt-3 leading-relaxed">
-                  {heroProduct.short_description || heroProduct.description || 'Calibrated athlete footwear engineered with responsive shock attenuation.'}
+                  {heroProduct.short_description || heroProduct.description || 'Calibrated athlete gear engineered for optimal performance.'}
                 </p>
               </div>
 
@@ -248,7 +211,7 @@ export default function HomePage() {
                   <div className="flex justify-between items-center mb-2">
                     <label className="text-xs font-bold uppercase tracking-wider">Select Size</label>
                     <span className="text-[10px] text-gray-400 font-mono">
-                      {selectedVariant?.stock ?? 50} IN STOCK
+                      {selectedVariant?.stock ?? 15} IN STOCK
                     </span>
                   </div>
                   <div className="grid grid-cols-4 gap-2">
@@ -283,7 +246,7 @@ export default function HomePage() {
                   href={`/product?slug=${heroProduct.slug}`}
                   className="w-full py-3 rounded-full border border-[#E5E5E5] text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-1.5 hover:border-black transition-colors"
                 >
-                  View Technical Specifications <ArrowRight className="w-3.5 h-3.5" />
+                  View Technical Specs <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
             </div>
@@ -293,15 +256,15 @@ export default function HomePage() {
       ) : (
         <div className="max-w-[1440px] mx-auto px-6 py-20 text-center">
           <Layers className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <h2 className="text-2xl font-black uppercase tracking-tight">No Products In This Department Yet</h2>
-          <p className="text-xs text-gray-500 mt-1">Open the Admin Control Tower to upload real items with photos and sizes.</p>
+          <h2 className="text-2xl font-black uppercase tracking-tight">No Releases in this Department Yet</h2>
+          <p className="text-xs text-gray-500 mt-1">Visit the Admin Tower to upload releases into this department.</p>
           <Link href="/admin" className="inline-block mt-4 px-6 py-2.5 bg-black text-white text-xs font-bold uppercase rounded-full">
             Open Admin Panel
           </Link>
         </div>
       )}
 
-      {/* Catalog Grid */}
+      {/* CATALOG RELEASES GRID */}
       <section id="catalog" className="max-w-[1440px] mx-auto px-6 py-16 border-t border-[#E5E5E5]">
         <div className="flex justify-between items-end mb-8">
           <div>
@@ -309,12 +272,9 @@ export default function HomePage() {
               <Flame className="w-4 h-4 text-red-600" /> DEPARTMENT RELEASES
             </div>
             <h2 className="text-3xl font-black uppercase tracking-tight text-[#111111] mt-1">
-              {activeDept === 'all' ? 'All Live Catalog' : `${activeDept.toUpperCase()}'S COLLECTION`}
+              {activeDept === 'all' ? 'All Live Releases' : `${activeDept.toUpperCase()}'S COLLECTION`}
             </h2>
           </div>
-          <Link href="/shop" className="text-xs font-bold font-mono underline hover:text-[#707072]">
-            BROWSE ALL →
-          </Link>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -357,5 +317,13 @@ export default function HomePage() {
         </div>
       </section>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="p-12 text-center text-xs font-mono">LOADING STOREFRONT...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }
