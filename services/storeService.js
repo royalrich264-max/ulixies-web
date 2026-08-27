@@ -28,7 +28,7 @@ export async function signOutUser() {
   if (error) throw error;
 }
 
-// ================= STORAGE & MEDIA MANAGEMENT =================
+// ================= STORAGE & MEDIA =================
 export async function uploadProductImage(file) {
   const fileExt = file.name.split('.').pop();
   const cleanName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
@@ -143,7 +143,81 @@ export async function getProducts({ search, department, category } = {}) {
   return data || [];
 }
 
-// ================= ADMIN PRODUCT ENGINE & SECURE DELETION =================
+// ================= WISHLIST / SAVED GEAR =================
+export function getLocalWishlist() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const saved = localStorage.getItem('ulx_saved_gear');
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function toggleWishlistProduct(product) {
+  if (typeof window === 'undefined' || !product) return [];
+  try {
+    const current = getLocalWishlist();
+    const exists = current.some((item) => item.id === product.id);
+    let updated;
+    if (exists) {
+      updated = current.filter((item) => item.id !== product.id);
+    } else {
+      updated = [
+        ...current,
+        {
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          department: product.department,
+          primary_category: product.primary_category,
+          base_price: product.base_price,
+          sale_price: product.sale_price,
+          image_url: product.product_images?.[0]?.url || ''
+        }
+      ];
+    }
+    localStorage.setItem('ulx_saved_gear', JSON.stringify(updated));
+    window.dispatchEvent(new Event('wishlist-updated'));
+    return updated;
+  } catch (e) {
+    console.error('Wishlist error:', e);
+    return [];
+  }
+}
+
+// ================= USER PROFILE & ADDRESSES =================
+export async function getUserProfile() {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  return {
+    user,
+    profile: profile || { full_name: user.user_metadata?.full_name || 'Athlete', email: user.email }
+  };
+}
+
+export async function getUserAddresses() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('addresses')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('is_default', { ascending: false });
+
+  if (error) return [];
+  return data || [];
+}
+
+// ================= ADMIN PRODUCT CREATION & SAFE DELETION =================
 export async function createFullAdminProduct(productData) {
   const {
     name,
@@ -185,7 +259,26 @@ export async function createFullAdminProduct(productData) {
     variants
   } = productData;
 
-  // 1. Insert Master Product Record
+  // 1. Slug Deduplication
+  let baseSlug = (slug || name || 'product')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+
+  if (!baseSlug) baseSlug = `item-${Date.now().toString().slice(-4)}`;
+
+  const { data: existing } = await supabase
+    .from('products')
+    .select('id')
+    .eq('slug', baseSlug)
+    .maybeSingle();
+
+  const finalSlug = existing 
+    ? `${baseSlug}-${Math.random().toString(36).substring(2, 6)}` 
+    : baseSlug;
+
+  // 2. Insert Master Record
   const { data: product, error: prodErr } = await supabase
     .from('products')
     .insert({
@@ -193,7 +286,7 @@ export async function createFullAdminProduct(productData) {
       department: department || 'men',
       primary_category: primary_category || 'shoes',
       subcategory: subcategory || 'Lifestyle',
-      slug: slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+      slug: finalSlug,
       brand_id: brand_id || null,
       category_id: category_id || null,
       description: description || '',
@@ -230,19 +323,19 @@ export async function createFullAdminProduct(productData) {
 
   if (prodErr) throw prodErr;
 
-  // 2. Insert Images (360 Rotator Frames)
+  // 3. Insert Images
   if (images && images.length > 0) {
     const imagesToInsert = images.map((img, index) => ({
       product_id: product.id,
       url: img.url,
       view_angle: img.view_angle || 'side',
-      alt_text: img.alt_text || `${name} frame ${index + 1}`,
+      alt_text: img.alt_text || `${name} angle ${index + 1}`,
       sort_order: index,
     }));
     await supabase.from('product_images').insert(imagesToInsert);
   }
 
-  // 3. Insert Variant Matrix
+  // 4. Insert Variants
   if (variants && variants.length > 0) {
     const variantsToInsert = variants.map((v) => ({
       product_id: product.id,
@@ -260,7 +353,6 @@ export async function createFullAdminProduct(productData) {
 
 export async function deleteProduct(productId) {
   try {
-    // 1. Fetch images to delete from Storage (best-effort)
     const { data: images } = await supabase
       .from('product_images')
       .select('url')
@@ -276,10 +368,9 @@ export async function deleteProduct(productId) {
       }
     }
   } catch (err) {
-    console.warn('Image lookup failed, continuing with product delete:', err);
+    console.warn('Image lookup failed, proceeding with DB delete:', err);
   }
 
-  // 2. Delete the master product row (child records will cascade delete)
   const { error } = await supabase
     .from('products')
     .delete()
@@ -648,7 +739,7 @@ export async function addToCart(cartId, variantId, quantity = 1, fallbackProduct
     } else {
       const { data: newVar } = await supabase
         .from('product_variants')
-        .insert({ product_id: fallbackProductId, size: '10', stock: 50 })
+        .insert({ product_id: fallbackProductId, size: 'OS', stock: 50 })
         .select('id')
         .single();
       if (newVar) activeVariantId = newVar.id;
