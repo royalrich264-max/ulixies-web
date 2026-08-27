@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Crown } from 'lucide-react';
 
 const SPLASH_SHOES = [
   'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=400&q=80',
@@ -17,36 +18,42 @@ export default function SplashScreen({ onFinish }) {
   const [isSpinning, setIsSpinning] = useState(true);
   const [ringCollapsed, setRingCollapsed] = useState(false);
   const [revealedIndex, setRevealedIndex] = useState(-1);
+  const [crownRevealed, setCrownRevealed] = useState(false);
   const [lineExpanded, setLineExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [removed, setRemoved] = useState(false);
 
   useEffect(() => {
-    // 1. Let the 6 shoes orbit slowly over 4.5s
+    // 1. Let the 6 shoes orbit slowly
     const ringTimer = setTimeout(() => {
       setIsSpinning(false);
       setRingCollapsed(true);
 
-      // 2. Stagger-reveal each letter individually
+      // 2. Reveal Crown Icon right as the name begins
+      setTimeout(() => {
+        setCrownRevealed(true);
+      }, 100);
+
+      // 3. Stagger-reveal each letter individually
       BRAND_LETTERS.forEach((_, idx) => {
         setTimeout(() => {
           setRevealedIndex((prev) => Math.max(prev, idx));
         }, 150 + idx * 70);
       });
 
-      // 3. Animate bottom line expansion
+      // 4. Animate bottom line expansion
       setTimeout(() => {
         setLineExpanded(true);
       }, 800);
 
-      // 4. Dismiss splash screen upwards to reveal main application
+      // 5. Dismiss splash screen upwards
       setTimeout(() => {
         setDismissed(true);
         setTimeout(() => {
           setRemoved(true);
           if (onFinish) onFinish();
         }, 800);
-      }, 2200);
+      }, 2400);
 
     }, 4500);
 
@@ -64,7 +71,7 @@ export default function SplashScreen({ onFinish }) {
     >
       <div className="relative flex flex-col items-center justify-center w-full h-full">
         
-        {/* 3D 6-Shoe Orbit Ring Container */}
+        {/* 3D 6-Shoe Orbit Ring */}
         <div className="w-[480px] h-[480px] relative flex items-center justify-center [perspective:1200px]">
           <div
             className={`w-full h-full absolute [transform-style:preserve-3d] transition-all duration-800 ease-[cubic-bezier(0.16,1,0.3,1)] ${
@@ -94,29 +101,45 @@ export default function SplashScreen({ onFinish }) {
           </div>
         </div>
 
-        {/* Staggered Name Reveal */}
+        {/* Staggered Crown + Name Reveal */}
         <div className="absolute flex flex-col items-center select-none pointer-events-none">
-          <div className="flex items-center justify-center font-black text-[#111111] text-6xl sm:text-8xl md:text-9xl tracking-tighter uppercase font-sans overflow-hidden py-4">
-            {BRAND_LETTERS.map((letter, idx) => {
-              const isRevealed = idx <= revealedIndex;
-              return (
-                <span
-                  key={idx}
-                  className={`inline-block transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                    isRevealed
-                      ? 'opacity-100 translate-y-0 scale-100 [transform:rotateX(0deg)] blur-none'
-                      : 'opacity-0 translate-y-[80px] scale-[0.7] [transform:rotateX(45deg)] blur-md'
-                  }`}
-                >
-                  {letter}
-                </span>
-              );
-            })}
+          
+          <div className="flex items-center justify-center gap-3 font-black text-[#111111] text-6xl sm:text-8xl md:text-9xl tracking-tighter uppercase font-sans overflow-hidden py-4">
+            
+            {/* CROWN LOGO REVEAL */}
+            <div
+              className={`transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                crownRevealed
+                  ? 'opacity-100 translate-y-0 scale-100'
+                  : 'opacity-0 translate-y-8 scale-50'
+              }`}
+            >
+              <Crown className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 text-black fill-current" />
+            </div>
+
+            {/* STAGGERED LETTERS */}
+            <div className="flex items-center">
+              {BRAND_LETTERS.map((letter, idx) => {
+                const isRevealed = idx <= revealedIndex;
+                return (
+                  <span
+                    key={idx}
+                    className={`inline-block transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                      isRevealed
+                        ? 'opacity-100 translate-y-0 scale-100 [transform:rotateX(0deg)] blur-none'
+                        : 'opacity-0 translate-y-[80px] scale-[0.7] [transform:rotateX(45deg)] blur-md'
+                    }`}
+                  >
+                    {letter}
+                  </span>
+                );
+              })}
+            </div>
           </div>
           
           <div
             className="h-[3px] bg-[#111111] rounded-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
-            style={{ width: lineExpanded ? '120px' : '0%' }}
+            style={{ width: lineExpanded ? '140px' : '0%' }}
           />
         </div>
 
