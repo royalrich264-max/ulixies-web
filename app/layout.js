@@ -21,7 +21,8 @@ import {
   LogOut, 
   Menu, 
   X, 
-  Flame,
+  Crown,
+  ShieldCheck,
   ArrowRight,
   Footprints,
   Shirt,
@@ -39,7 +40,6 @@ export default function RootLayout({ children }) {
   const [hoveredDept, setHoveredDept] = useState(null);
   const [deptData, setDeptData] = useState({});
 
-  // Search Bar State
   const [allProducts, setAllProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -141,38 +141,42 @@ export default function RootLayout({ children }) {
 
   return (
     <html lang="en">
-      <body className="bg-white text-[#111111] antialiased min-h-screen flex flex-col font-sans">
+      <body className="bg-white text-[#111111] antialiased min-h-screen flex flex-col font-sans selection:bg-[#111111] selection:text-white">
         
-        {/* TOP ATHLETE BAR */}
-        <div className="bg-[#111111] text-white px-6 h-9 flex items-center justify-between text-[11px] font-mono border-b border-white/10 z-50 relative">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#CCFF00] animate-pulse"></span>
-            <span className="font-bold tracking-wider">ULIXIES // PERFORMANCE ARCHIVE</span>
+        {/* TOP ATHLETE BAR & LEVEL XP BADGE */}
+        <div className="bg-[#F5F5F5] text-[#707072] border-b border-[#E5E5E5] px-6 h-9 flex items-center justify-between text-[11px] font-medium z-50 relative">
+          <div className="flex items-center gap-6">
+            <span className="text-[#111111] font-bold flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#111111]" /> ATHLETE PASSPORT
+            </span>
+            <span className="hidden md:inline-block border-l border-[#E5E5E5] pl-4 text-[10px] font-mono uppercase">
+              STATUS: PRO TIER VERIFIED
+            </span>
           </div>
 
-          <div className="flex items-center gap-6">
-            <Link href="/orders" className="hover:text-[#CCFF00] transition-colors flex items-center gap-1.5 font-bold">
-              <Package className="w-3.5 h-3.5 text-[#CCFF00]" /> My Orders
+          <div className="flex items-center gap-5">
+            <Link href="/orders" className="hover:text-[#111111] transition-colors flex items-center gap-1 font-bold text-xs">
+              <Package className="w-3.5 h-3.5 text-[#111111]" /> My Orders
             </Link>
-            <Link href="/addresses" className="hover:text-[#CCFF00] transition-colors flex items-center gap-1.5 font-bold">
+            <Link href="/addresses" className="hover:text-[#111111] transition-colors flex items-center gap-1 font-bold text-xs">
               <MapPin className="w-3.5 h-3.5 text-gray-400" /> Delivery Addresses
             </Link>
             
             {user ? (
-              <div className="flex items-center gap-3 border-l border-white/20 pl-4">
-                <span className="text-[#CCFF00] font-bold flex items-center gap-1">
+              <div className="flex items-center gap-3 border-l border-[#E5E5E5] pl-4">
+                <span className="text-[#111111] font-mono font-bold flex items-center gap-1">
                   <User className="w-3 h-3" /> {user.email}
                 </span>
                 <button
                   onClick={async () => { await signOutUser(); window.location.reload(); }}
-                  className="text-gray-400 hover:text-red-400 font-bold transition-colors"
+                  className="text-gray-400 hover:text-red-600 transition-colors"
                   title="Sign Out"
                 >
                   <LogOut className="w-3 h-3" />
                 </button>
               </div>
             ) : (
-              <Link href="/login" className="hover:text-[#CCFF00] transition-colors font-bold border-l border-white/20 pl-4">
+              <Link href="/login" className="hover:text-[#111111] font-bold text-xs border-l border-[#E5E5E5] pl-4">
                 Sign In / Register
               </Link>
             )}
@@ -182,8 +186,14 @@ export default function RootLayout({ children }) {
         {/* MAIN NAVIGATION HEADER */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#E5E5E5] px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8 h-full">
-            <Link href="/" className="font-black text-2xl tracking-tighter uppercase font-mono">
-              ULIXIES
+            
+            <Link href="/" className="flex items-center gap-2 group">
+              <div className="w-8 h-8 rounded-lg bg-black text-[#CCFF00] flex items-center justify-center group-hover:bg-[#CCFF00] group-hover:text-black transition-colors shadow-sm">
+                <Crown className="w-5 h-5 stroke-[2.5]" />
+              </div>
+              <span className="font-black text-2xl tracking-tighter uppercase font-mono text-black">
+                ULIXIES
+              </span>
             </Link>
 
             {/* DESKTOP HOVERABLE FLYOUT MENU */}
@@ -264,7 +274,7 @@ export default function RootLayout({ children }) {
                             href={dept.href}
                             className="text-[10px] font-mono font-bold text-black flex items-center justify-between hover:underline pt-3 border-t border-[#E5E5E5] mt-3"
                           >
-                            <span>VIEW FULL {dept.label.toUpperCase()} ARCHIVE</span>
+                            <span>EXPLORE ALL {dept.label.toUpperCase()}</span>
                             <ArrowRight className="w-3 h-3" />
                           </Link>
                         </div>
@@ -280,7 +290,7 @@ export default function RootLayout({ children }) {
                                   href={`/product?slug=${p.slug}`}
                                   className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-gray-50 border border-transparent hover:border-[#E5E5E5] transition-all"
                                 >
-                                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center p-1 shrink-0 overflow-hidden border">
                                     <img src={img} alt={p.name} className="object-contain max-h-full max-w-full" />
                                   </div>
                                   <div className="overflow-hidden">
@@ -303,7 +313,7 @@ export default function RootLayout({ children }) {
             </nav>
           </div>
 
-          {/* ACTION BUTTONS & SEARCH INPUT */}
+          {/* ACTION BUTTONS */}
           <div className="flex items-center gap-3">
             <div ref={searchContainerRef} className="relative">
               <form onSubmit={handleSearchSubmit} className="relative flex items-center">
@@ -382,7 +392,7 @@ export default function RootLayout({ children }) {
           </div>
         </header>
 
-        {/* MOBILE SLIDE-OUT MENU */}
+        {/* MOBILE SLIDE-OUT */}
         {mobileMenuOpen && (
           <div className="lg:hidden fixed inset-0 top-25 bg-white z-50 p-6 flex flex-col justify-between border-b border-[#E5E5E5] overflow-y-auto">
             <div className="space-y-4">
@@ -422,12 +432,15 @@ export default function RootLayout({ children }) {
 
         <footer className="bg-[#111111] text-white border-t border-[#222222] py-12 px-6 mt-20">
           <div className="max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-gray-400 font-mono">
-            <div>© {new Date().getFullYear()} ULIXIES ATHLETICS. ALL RIGHTS RESERVED.</div>
+            <div className="flex items-center gap-2">
+              <Crown className="w-4 h-4 text-[#CCFF00]" />
+              <span>© 2026 ULIXIES RESELLER CORP. ALL RIGHTS RESERVED.</span>
+            </div>
             <div className="flex gap-6 uppercase font-bold">
               <Link href="/orders" className="hover:text-white">Orders</Link>
               <Link href="/addresses" className="hover:text-white">Addresses</Link>
               <Link href="/wishlist" className="hover:text-white">Saved Gear</Link>
-              <Link href="/admin" className="hover:text-[#CCFF00]">Admin Panel</Link>
+              <Link href="/admin" className="hover:text-[#CCFF00]">Admin Tower</Link>
             </div>
           </div>
         </footer>

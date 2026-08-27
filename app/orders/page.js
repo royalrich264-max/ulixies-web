@@ -48,7 +48,7 @@ export default function OrdersPage() {
           </Link>
         </div>
       ) : (
-        /* SHORT, COMPACT CARDS GRID (3 PER ROW) */
+        /* SHORT, COMPACT CARDS (3 PER ROW) */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {orders.map((order) => {
             const firstItem = order.order_items?.[0];
@@ -60,7 +60,6 @@ export default function OrdersPage() {
                 className="bg-white border border-[#E5E5E5] rounded-2xl p-4 flex flex-col justify-between hover:border-black hover:shadow-md transition-all"
               >
                 <div>
-                  {/* CARD TOP ROW */}
                   <div className="flex justify-between items-center mb-3">
                     <span className="font-mono font-black text-xs text-black">{order.order_number}</span>
                     
@@ -76,7 +75,6 @@ export default function OrdersPage() {
                     </span>
                   </div>
 
-                  {/* MINI ITEM PREVIEW */}
                   <div className="flex items-center gap-3 p-2 bg-[#F9F9F9] rounded-xl mb-3 border border-[#E5E5E5]">
                     <div className="w-12 h-12 bg-white rounded-lg p-1 flex items-center justify-center shrink-0 border border-black/5">
                       <img 
@@ -97,7 +95,6 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
-                {/* CARD ACTION BOTTOM ROW */}
                 <div className="pt-2.5 border-t border-[#E5E5E5] flex items-center justify-between">
                   <div>
                     <span className="text-[9px] font-mono text-gray-400 block font-bold">TOTAL</span>

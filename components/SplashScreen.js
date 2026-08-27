@@ -24,29 +24,24 @@ export default function SplashScreen({ onFinish }) {
   const [removed, setRemoved] = useState(false);
 
   useEffect(() => {
-    // 1. Let the 6 shoes orbit slowly
     const ringTimer = setTimeout(() => {
       setIsSpinning(false);
       setRingCollapsed(true);
 
-      // 2. Reveal Crown Icon right as the name begins
       setTimeout(() => {
         setCrownRevealed(true);
       }, 100);
 
-      // 3. Stagger-reveal each letter individually
       BRAND_LETTERS.forEach((_, idx) => {
         setTimeout(() => {
           setRevealedIndex((prev) => Math.max(prev, idx));
         }, 150 + idx * 70);
       });
 
-      // 4. Animate bottom line expansion
       setTimeout(() => {
         setLineExpanded(true);
       }, 800);
 
-      // 5. Dismiss splash screen upwards
       setTimeout(() => {
         setDismissed(true);
         setTimeout(() => {
@@ -101,12 +96,10 @@ export default function SplashScreen({ onFinish }) {
           </div>
         </div>
 
-        {/* Staggered Crown + Name Reveal */}
+        {/* Crown & Staggered Letter Reveal */}
         <div className="absolute flex flex-col items-center select-none pointer-events-none">
-          
           <div className="flex items-center justify-center gap-3 font-black text-[#111111] text-6xl sm:text-8xl md:text-9xl tracking-tighter uppercase font-sans overflow-hidden py-4">
             
-            {/* CROWN LOGO REVEAL */}
             <div
               className={`transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                 crownRevealed
@@ -117,7 +110,6 @@ export default function SplashScreen({ onFinish }) {
               <Crown className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 text-black fill-current" />
             </div>
 
-            {/* STAGGERED LETTERS */}
             <div className="flex items-center">
               {BRAND_LETTERS.map((letter, idx) => {
                 const isRevealed = idx <= revealedIndex;
