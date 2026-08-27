@@ -1,0 +1,771 @@
+﻿import { supabase } from '@/lib/supabaseClient';
+
+// ================= AUTHENTICATION =================
+export async function getCurrentUser() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return user;
+}
+
+export async function signUpUser(email, password, fullName) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: fullName } }
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function signInUser(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data;
+}
+
+export async function signOutUser() {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
+// ================= STORAGE & MEDIA MANAGEMENT =================
+export async function uploadProductImage(file) {
+  const fileExt = file.name.split('.').pop();
+  const cleanName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+  const filePath = `products/${cleanName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('product-images')
+    .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+  if (uploadError) throw uploadError;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('product-images')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
+}
+
+export async function deleteProductImageFile(publicUrl) {
+  try {
+    if (!publicUrl) return;
+    const urlParts = publicUrl.split('/product-images/');
+    if (urlParts.length < 2) return;
+    const filePath = decodeURIComponent(urlParts[1]);
+
+    const { error } = await supabase.storage
+      .from('product-images')
+      .remove([filePath]);
+
+    if (error) console.warn('Storage file deletion error:', error);
+  } catch (err) {
+    console.error('Failed to remove image from storage bucket:', err);
+  }
+}
+
+// ================= STOREFRONT PRODUCT QUERIES =================
+export async function getSplashShoes() {
+  const { data, error } = await supabase
+    .from('product_images')
+    .select('url')
+    .order('created_at', { ascending: false })
+    .limit(8);
+
+  if (error || !data || data.length === 0) return [];
+  return data.map((img) => img.url);
+}
+
+export async function getHomeProducts(department = null) {
+  let query = supabase
+    .from('products')
+    .select(`
+      *,
+      brands ( name ),
+      product_images ( id, url, sort_order, view_angle, alt_text ),
+      product_variants ( id, color, size, stock, sku, price_override )
+    `)
+    .order('display_priority', { ascending: true })
+    .order('created_at', { ascending: false });
+
+  if (department && department !== 'all') {
+    query = query.eq('department', department);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('getHomeProducts error:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function getProductBySlug(slug) {
+  const { data, error } = await supabase
+    .from('products')
+    .select(`
+      *,
+      brands ( name ),
+      product_images ( id, url, sort_order, view_angle, alt_text ),
+      product_variants ( id, color, size, stock, sku, price_override ),
+      reviews (*)
+    `)
+    .eq('slug', slug)
+    .single();
+
+  if (error) {
+    console.error('getProductBySlug error:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getProducts({ search, department, category } = {}) {
+  let query = supabase
+    .from('products')
+    .select(`
+      *,
+      brands ( name ),
+      product_images ( id, url, sort_order ),
+      product_variants ( id, color, size, stock, price_override )
+    `)
+    .order('display_priority', { ascending: true });
+
+  if (search) query = query.ilike('name', `%${search}%`);
+  if (department && department !== 'all') query = query.eq('department', department);
+  if (category && category !== 'all') query = query.eq('primary_category', category);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('getProducts error:', error);
+    return [];
+  }
+  return data || [];
+}
+
+// ================= ADMIN PRODUCT ENGINE & SECURE DELETION =================
+export async function createFullAdminProduct(productData) {
+  const {
+    name,
+    department,
+    primary_category,
+    subcategory,
+    brand_id,
+    category_id,
+    description,
+    short_description,
+    sku,
+    tags,
+    status,
+    base_price,
+    sale_price,
+    currency,
+    sale_start_date,
+    sale_end_date,
+    materials,
+    fit,
+    weight_spec,
+    care_instructions,
+    country_of_manufacture,
+    features,
+    package_weight,
+    dimensions,
+    shipping_category,
+    is_free_shipping,
+    seo_title,
+    meta_description,
+    slug,
+    is_new,
+    is_best_seller,
+    is_featured,
+    is_on_sale,
+    is_homepage,
+    display_priority,
+    images,
+    variants
+  } = productData;
+
+  // 1. Insert Master Product Record
+  const { data: product, error: prodErr } = await supabase
+    .from('products')
+    .insert({
+      name,
+      department: department || 'men',
+      primary_category: primary_category || 'shoes',
+      subcategory: subcategory || 'Lifestyle',
+      slug: slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+      brand_id: brand_id || null,
+      category_id: category_id || null,
+      description: description || '',
+      short_description: short_description || '',
+      sku: sku || null,
+      tags: tags || [],
+      status: status || 'active',
+      base_price: Number(base_price),
+      sale_price: sale_price ? Number(sale_price) : null,
+      currency: currency || 'USD',
+      sale_start_date: sale_start_date || null,
+      sale_end_date: sale_end_date || null,
+      materials: materials || '',
+      fit: fit || '',
+      weight_spec: weight_spec || '',
+      care_instructions: care_instructions || '',
+      country_of_manufacture: country_of_manufacture || '',
+      features: features || [],
+      package_weight: package_weight ? Number(package_weight) : null,
+      dimensions: dimensions || { length: 0, width: 0, height: 0 },
+      shipping_category: shipping_category || 'standard',
+      is_free_shipping: Boolean(is_free_shipping),
+      seo_title: seo_title || name,
+      meta_description: meta_description || short_description || '',
+      is_new: Boolean(is_new),
+      is_best_seller: Boolean(is_best_seller),
+      is_featured: Boolean(is_featured),
+      is_on_sale: Boolean(is_on_sale),
+      is_homepage: Boolean(is_homepage),
+      display_priority: Number(display_priority) || 10,
+    })
+    .select()
+    .single();
+
+  if (prodErr) throw prodErr;
+
+  // 2. Insert Images (360 Rotator Frames)
+  if (images && images.length > 0) {
+    const imagesToInsert = images.map((img, index) => ({
+      product_id: product.id,
+      url: img.url,
+      view_angle: img.view_angle || 'side',
+      alt_text: img.alt_text || `${name} frame ${index + 1}`,
+      sort_order: index,
+    }));
+    await supabase.from('product_images').insert(imagesToInsert);
+  }
+
+  // 3. Insert Variant Matrix
+  if (variants && variants.length > 0) {
+    const variantsToInsert = variants.map((v) => ({
+      product_id: product.id,
+      color: v.color || null,
+      size: v.size || 'OS',
+      sku: v.sku || `${sku || 'SKU'}-${v.color || 'CLR'}-${v.size || 'OS'}`,
+      stock: Number(v.stock) || 0,
+      price_override: v.price_override ? Number(v.price_override) : null,
+    }));
+    await supabase.from('product_variants').insert(variantsToInsert);
+  }
+
+  return product;
+}
+
+export async function deleteProduct(productId) {
+  try {
+    // 1. Fetch images to delete from Storage (best-effort)
+    const { data: images } = await supabase
+      .from('product_images')
+      .select('url')
+      .eq('product_id', productId);
+
+    if (images && images.length > 0) {
+      for (const img of images) {
+        try {
+          await deleteProductImageFile(img.url);
+        } catch (storageErr) {
+          console.warn('Storage delete skipped:', storageErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Image lookup failed, continuing with product delete:', err);
+  }
+
+  // 2. Delete the master product row (child records will cascade delete)
+  const { error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', productId);
+
+  if (error) {
+    console.error('Failed to delete product from database:', error);
+    throw error;
+  }
+}
+
+export async function duplicateProduct(productId) {
+  const { data: original, error } = await supabase
+    .from('products')
+    .select(`*, product_images (*), product_variants (*)`)
+    .eq('id', productId)
+    .single();
+
+  if (error || !original) throw new Error('Product not found for duplication.');
+
+  return await createFullAdminProduct({
+    ...original,
+    name: `${original.name} (Copy)`,
+    slug: `${original.slug}-copy-${Date.now().toString().slice(-4)}`,
+    images: original.product_images || [],
+    variants: original.product_variants || [],
+  });
+}
+
+// ================= INVENTORY & AUDIT LOGS =================
+export async function getInventoryVariants() {
+  const { data, error } = await supabase
+    .from('product_variants')
+    .select(`
+      *,
+      products ( id, name, sku, base_price, sale_price, department, primary_category, product_images ( url ) )
+    `)
+    .order('stock', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function adjustInventoryStock(variantId, changeAmount, reason = 'Admin Adjustment') {
+  const { data: variant, error: varErr } = await supabase
+    .from('product_variants')
+    .select('stock')
+    .eq('id', variantId)
+    .single();
+
+  if (varErr) throw varErr;
+
+  const newStock = Math.max(0, (variant.stock || 0) + changeAmount);
+
+  await supabase
+    .from('product_variants')
+    .update({ stock: newStock })
+    .eq('id', variantId);
+
+  await supabase
+    .from('inventory_logs')
+    .insert({
+      variant_id: variantId,
+      change_amount: changeAmount,
+      reason: reason,
+    });
+
+  return newStock;
+}
+
+export async function getInventoryLogs() {
+  const { data, error } = await supabase
+    .from('inventory_logs')
+    .select(`
+      *,
+      product_variants (
+        color,
+        size,
+        sku,
+        products ( name )
+      )
+    `)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) return [];
+  return data || [];
+}
+
+// ================= ORDERS & FULFILLMENT =================
+export async function getAllAdminOrders() {
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`*, order_items (*)`)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateOrderFulfillment(orderId, { status, tracking_number, shipping_carrier }) {
+  const payload = {};
+  if (status) payload.status = status;
+  if (tracking_number !== undefined) payload.tracking_number = tracking_number;
+  if (shipping_carrier !== undefined) payload.shipping_carrier = shipping_carrier;
+
+  const { data, error } = await supabase
+    .from('orders')
+    .update(payload)
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ================= CUSTOMERS =================
+export async function getAllCustomers() {
+  const { data: profiles, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+
+  const { data: orders } = await supabase.from('orders').select('user_id, total_amount, total, created_at');
+
+  return profiles.map((cust) => {
+    const userOrders = (orders || []).filter((o) => o.user_id === cust.id);
+    const totalSpent = userOrders.reduce((acc, o) => acc + Number(o.total_amount ?? o.total ?? 0), 0);
+    const lastOrder = userOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+    return {
+      ...cust,
+      ordersCount: userOrders.length,
+      totalSpent,
+      lastOrderDate: lastOrder ? lastOrder.created_at : cust.created_at,
+    };
+  });
+}
+
+// ================= RETURNS =================
+export async function getAllReturns() {
+  const { data, error } = await supabase
+    .from('returns')
+    .select(`*, orders ( order_number )`)
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+  return data || [];
+}
+
+export async function updateReturnStatus(returnId, status, notes = '') {
+  const { data, error } = await supabase
+    .from('returns')
+    .update({ status, notes })
+    .eq('id', returnId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function createReturnRequest({ order_id, customer_name, customer_email, product_name, variant_size, reason }) {
+  const { data, error } = await supabase
+    .from('returns')
+    .insert({ order_id, customer_name, customer_email, product_name, variant_size, reason, status: 'requested' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ================= REVIEWS =================
+export async function getAllReviews() {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select(`*, products ( name, slug )`)
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+  return data || [];
+}
+
+export async function toggleReviewPublish(reviewId, is_published) {
+  const { data, error } = await supabase
+    .from('reviews')
+    .update({ is_published })
+    .eq('id', reviewId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteReview(reviewId) {
+  const { error } = await supabase.from('reviews').delete().eq('id', reviewId);
+  if (error) throw error;
+}
+
+// ================= COUPONS & PROMOTIONS =================
+export async function getAllCoupons() {
+  const { data, error } = await supabase
+    .from('coupons')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+  return data || [];
+}
+
+export async function createCoupon(couponData) {
+  const { data, error } = await supabase
+    .from('coupons')
+    .insert({
+      code: couponData.code.toUpperCase().trim(),
+      discount_type: couponData.discount_type,
+      discount_value: Number(couponData.discount_value),
+      min_order_amount: Number(couponData.min_order_amount) || 0,
+      max_uses: Number(couponData.max_uses) || 500,
+      start_date: couponData.start_date || new Date().toISOString(),
+      end_date: couponData.end_date || null,
+      is_active: true,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCoupon(couponId) {
+  const { error } = await supabase.from('coupons').delete().eq('id', couponId);
+  if (error) throw error;
+}
+
+// ================= STORE CONTENT =================
+export async function getStoreContent(key) {
+  const { data, error } = await supabase
+    .from('store_content')
+    .select('content')
+    .eq('key', key)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data.content;
+}
+
+export async function updateStoreContent(key, content) {
+  const { data, error } = await supabase
+    .from('store_content')
+    .upsert({ key, content, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ================= STORE SETTINGS =================
+export async function getStoreSettings(key = 'general') {
+  const { data, error } = await supabase
+    .from('store_settings')
+    .select('value')
+    .eq('key', key)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data.value;
+}
+
+export async function updateStoreSettings(key, value) {
+  const { data, error } = await supabase
+    .from('store_settings')
+    .upsert({ key, value, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ================= CART SYSTEM =================
+function getLocalCartId() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('ulx_cart_id');
+}
+
+export async function getCart() {
+  if (typeof window === 'undefined') return { id: null, items: [] };
+
+  let cartId = getLocalCartId();
+  const user = await getCurrentUser();
+
+  if (cartId) {
+    const { data: existingCart } = await supabase
+      .from('carts')
+      .select('id')
+      .eq('id', cartId)
+      .maybeSingle();
+
+    if (!existingCart) cartId = null;
+  }
+
+  if (!cartId) {
+    const { data: newCart, error: createError } = await supabase
+      .from('carts')
+      .insert({ user_id: user?.id || null })
+      .select('id')
+      .single();
+
+    if (createError || !newCart) return { id: null, items: [] };
+    cartId = newCart.id;
+    localStorage.setItem('ulx_cart_id', cartId);
+  }
+
+  const { data: items, error: itemsError } = await supabase
+    .from('cart_items')
+    .select(`
+      id,
+      quantity,
+      variant_id,
+      product_variants (
+        id,
+        color,
+        size,
+        price_override,
+        products (
+          id,
+          name,
+          base_price,
+          sale_price,
+          product_images ( url )
+        )
+      )
+    `)
+    .eq('cart_id', cartId);
+
+  if (itemsError) return { id: cartId, items: [] };
+  return { id: cartId, items: items || [] };
+}
+
+export async function addToCart(cartId, variantId, quantity = 1, fallbackProductId = null) {
+  let activeCartId = cartId;
+  if (!activeCartId) {
+    const cartRes = await getCart();
+    activeCartId = cartRes.id;
+  }
+
+  let activeVariantId = variantId;
+
+  if (!activeVariantId && fallbackProductId) {
+    const { data: existingVariant } = await supabase
+      .from('product_variants')
+      .select('id')
+      .eq('product_id', fallbackProductId)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingVariant) {
+      activeVariantId = existingVariant.id;
+    } else {
+      const { data: newVar } = await supabase
+        .from('product_variants')
+        .insert({ product_id: fallbackProductId, size: '10', stock: 50 })
+        .select('id')
+        .single();
+      if (newVar) activeVariantId = newVar.id;
+    }
+  }
+
+  if (!activeCartId || !activeVariantId) {
+    throw new Error('Please select an available size.');
+  }
+
+  const { data: existing } = await supabase
+    .from('cart_items')
+    .select('id, quantity')
+    .eq('cart_id', activeCartId)
+    .eq('variant_id', activeVariantId)
+    .maybeSingle();
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('cart_items')
+      .update({ quantity: existing.quantity + quantity })
+      .eq('id', existing.id)
+      .select();
+    if (error) throw error;
+    return data;
+  } else {
+    const { data, error } = await supabase
+      .from('cart_items')
+      .insert({ cart_id: activeCartId, variant_id: activeVariantId, quantity })
+      .select();
+    if (error) throw error;
+    return data;
+  }
+}
+
+export async function removeFromCart(itemId) {
+  const { error } = await supabase.from('cart_items').delete().eq('id', itemId);
+  if (error) throw error;
+}
+
+export async function clearCart(cartId) {
+  const { error } = await supabase.from('cart_items').delete().eq('cart_id', cartId);
+  if (error) console.error('Clear cart error:', error);
+}
+
+// ================= ORDERS =================
+export async function createOrder({ customer, items, total, subtotal, shippingCost, shippingSpeed }) {
+  const user = await getCurrentUser();
+  const orderNumber = 'ULX-' + Math.floor(100000 + Math.random() * 900000);
+  const parsedTotal = Number(total);
+
+  const { data: order, error: orderErr } = await supabase
+    .from('orders')
+    .insert({
+      order_number: orderNumber,
+      user_id: user ? user.id : null,
+      guest_email: user ? null : customer.email,
+      total: parsedTotal,
+      total_amount: parsedTotal,
+      subtotal: Number(subtotal),
+      shipping_cost: Number(shippingCost),
+      shipping_speed: shippingSpeed,
+      shipping_address: customer,
+      status: 'processing'
+    })
+    .select()
+    .single();
+
+  if (orderErr) throw new Error(orderErr.message);
+
+  if (items && items.length > 0) {
+    const orderLineItems = items.map((item) => {
+      const v = item.product_variants;
+      const p = v?.products;
+      const unitPrice = v?.price_override ?? p?.sale_price ?? p?.base_price ?? 0;
+
+      return {
+        order_id: order.id,
+        variant_id: v?.id || null,
+        product_name: p?.name || 'Footwear / Gear',
+        variant_size: `${v?.color ? v.color + ' / ' : ''}${v?.size || 'OS'}`,
+        unit_price: Number(unitPrice),
+        quantity: item.quantity,
+        image_url: p?.product_images?.[0]?.url || ''
+      };
+    });
+
+    await supabase.from('order_items').insert(orderLineItems);
+  }
+
+  const cartId = getLocalCartId();
+  if (cartId) await clearCart(cartId);
+
+  return order;
+}
+
+export async function getUserOrders() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`*, order_items (*)`)
+    .or(`user_id.eq.${user.id},guest_email.eq.${user.email}`)
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+  return data || [];
+}
+
+export async function getOrderDetails(orderNumber) {
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`*, order_items (*)`)
+    .eq('order_number', orderNumber)
+    .single();
+
+  if (error) return null;
+  return data;
+}
