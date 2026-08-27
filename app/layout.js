@@ -40,6 +40,7 @@ export default function RootLayout({ children }) {
   const [hoveredDept, setHoveredDept] = useState(null);
   const [deptData, setDeptData] = useState({});
 
+  // Search Engine State
   const [allProducts, setAllProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -143,7 +144,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body className="bg-white text-[#111111] antialiased min-h-screen flex flex-col font-sans selection:bg-[#111111] selection:text-white">
         
-        {/* TOP ATHLETE BAR & LEVEL XP BADGE */}
+        {/* ATHLETE PASSPORT BAR */}
         <div className="bg-[#F5F5F5] text-[#707072] border-b border-[#E5E5E5] px-6 h-9 flex items-center justify-between text-[11px] font-medium z-50 relative">
           <div className="flex items-center gap-6">
             <span className="text-[#111111] font-bold flex items-center gap-1.5">
@@ -183,10 +184,11 @@ export default function RootLayout({ children }) {
           </div>
         </div>
 
-        {/* MAIN NAVIGATION HEADER */}
+        {/* PRIMARY NAVIGATION HEADER */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#E5E5E5] px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8 h-full">
             
+            {/* BRAND LOGO WITH CROWN */}
             <Link href="/" className="flex items-center gap-2 group">
               <div className="w-8 h-8 rounded-lg bg-black text-[#CCFF00] flex items-center justify-center group-hover:bg-[#CCFF00] group-hover:text-black transition-colors shadow-sm">
                 <Crown className="w-5 h-5 stroke-[2.5]" />
@@ -196,7 +198,7 @@ export default function RootLayout({ children }) {
               </span>
             </Link>
 
-            {/* DESKTOP HOVERABLE FLYOUT MENU */}
+            {/* DESKTOP HOVERABLE FLYOUT DIRECTORY */}
             <nav className="hidden lg:flex items-center gap-7 text-xs font-bold uppercase tracking-wider h-full">
               {navDepartments.map((dept) => {
                 const stats = deptData[dept.id] || { total: 0, newDrops: 0, shoes: 0, clothes: 0, accessories: 0, sale: 0, recentProducts: [] };
@@ -313,7 +315,7 @@ export default function RootLayout({ children }) {
             </nav>
           </div>
 
-          {/* ACTION BUTTONS */}
+          {/* ACTION BUTTONS & SEARCH INPUT */}
           <div className="flex items-center gap-3">
             <div ref={searchContainerRef} className="relative">
               <form onSubmit={handleSearchSubmit} className="relative flex items-center">
@@ -392,7 +394,7 @@ export default function RootLayout({ children }) {
           </div>
         </header>
 
-        {/* MOBILE SLIDE-OUT */}
+        {/* MOBILE SLIDE-OUT DRAWER */}
         {mobileMenuOpen && (
           <div className="lg:hidden fixed inset-0 top-25 bg-white z-50 p-6 flex flex-col justify-between border-b border-[#E5E5E5] overflow-y-auto">
             <div className="space-y-4">
@@ -430,11 +432,12 @@ export default function RootLayout({ children }) {
           {children}
         </main>
 
+        {/* FOOTER */}
         <footer className="bg-[#111111] text-white border-t border-[#222222] py-12 px-6 mt-20">
           <div className="max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-gray-400 font-mono">
             <div className="flex items-center gap-2">
               <Crown className="w-4 h-4 text-[#CCFF00]" />
-              <span>© 2026 ULIXIES RESELLER CORP. ALL RIGHTS RESERVED.</span>
+              <span>© 2026 ULIXIES RESELLER CORP. ALL RIGHTS RESERVED.</span>[cite: 1]
             </div>
             <div className="flex gap-6 uppercase font-bold">
               <Link href="/orders" className="hover:text-white">Orders</Link>
