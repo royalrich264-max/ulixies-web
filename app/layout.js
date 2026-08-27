@@ -2,7 +2,8 @@
 
 import './globals.css';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
 import { 
   getCart, 
   getCurrentUser, 
@@ -28,12 +29,20 @@ import {
 } from 'lucide-react';
 
 export default function RootLayout({ children }) {
+  const router = useRouter();
   const [cartCount, setCartCount] = useState(0);
   const [wishlistCount, setWishlistCount] = useState(0);
   const [user, setUser] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hoveredDept, setHoveredDept] = useState(null);
   const [deptData, setDeptData] = useState({});
+
+  // Header Search Input State
+  const [allProducts, setAllProducts] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const searchContainerRef = useRef(null);
 
   useEffect(() => {
     async function loadHeaderData() {
@@ -49,6 +58,7 @@ export default function RootLayout({ children }) {
         setWishlistCount(saved.length);
 
         const allProds = await getHomeProducts();
+        setAllProducts(allProds || []);
         
         const depts = ['all', 'men', 'women', 'kids', 'sports', 'sale'];
         const compiled = {};
@@ -83,8 +93,46 @@ export default function RootLayout({ children }) {
       setWishlistCount(getLocalWishlist().length);
     };
     window.addEventListener('wishlist-updated', handleWishlistUpdate);
-    return () => window.removeEventListener('wishlist-updated', handleWishlistUpdate);
+
+    const handleClickOutside = (e) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      window.removeEventListener('wishlist-updated', handleWishlistUpdate);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
+
+  // Filter products live as user types into header input
+  const handleSearchInput = (e) => {
+    const val = e.target.value;
+    setSearchQuery(val);
+    if (!val.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const q = val.toLowerCase();
+    const matches = allProducts.filter((p) => 
+      p.name?.toLowerCase().includes(q) ||
+      p.department?.toLowerCase().includes(q) ||
+      p.primary_category?.toLowerCase().includes(q) ||
+      p.subcategory?.toLowerCase().includes(q) ||
+      p.sku?.toLowerCase().includes(q)
+    ).slice(0, 5);
+    setSearchResults(matches);
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      setSearchOpen(false);
+      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
 
   const navDepartments = [
     { id: 'all', label: 'All Releases', href: '/' },
@@ -103,7 +151,7 @@ export default function RootLayout({ children }) {
         <div className="bg-[#111111] text-white px-6 h-9 flex items-center justify-between text-[11px] font-mono border-b border-white/10 z-50 relative">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#CCFF00] animate-pulse"></span>
-            <span className="font-bold tracking-wider">ULIXIES // PERFORMANCE ARCHIVE</span>
+            <span className="font-bold tracking-wider">ULIXIES // OFFICIAL PERFORMANCE ARCHIVE</span>
           </div>
 
           <div className="flex items-center gap-6">
@@ -142,7 +190,7 @@ export default function RootLayout({ children }) {
               ULIXIES
             </Link>
 
-            {/* DESKTOP HOVERABLE FLYOUT MENU WITH LIVE PRODUCT IMAGES */}
+            {/* DESKTOP HOVERABLE FLYOUT MENU */}
             <nav className="hidden lg:flex items-center gap-7 text-xs font-bold uppercase tracking-wider h-full">
               {navDepartments.map((dept) => {
                 const stats = deptData[dept.id] || { total: 0, newDrops: 0, shoes: 0, clothes: 0, recentProducts: [] };
@@ -164,7 +212,6 @@ export default function RootLayout({ children }) {
                     {hoveredDept === dept.id && (
                       <div className="absolute top-16 left-0 w-[520px] bg-white border border-[#E5E5E5] shadow-2xl rounded-2xl p-5 z-50 text-left grid grid-cols-12 gap-6">
                         
-                        {/* LEFT COLUMN: STATS & CATEGORY LINKS */}
                         <div className="col-span-6 border-r border-[#E5E5E5] pr-4 flex flex-col justify-between">
                           <div>
                             <div className="flex justify-between items-center border-b border-[#E5E5E5] pb-2 mb-3">
@@ -219,7 +266,6 @@ export default function RootLayout({ children }) {
                           </Link>
                         </div>
 
-                        {/* RIGHT COLUMN: REAL RECENT PRODUCT PREVIEWS */}
                         <div className="col-span-6 space-y-2">
                           <div className="text-[10px] font-mono uppercase font-bold text-gray-400">Featured Releases</div>
                           {stats.recentProducts && stats.recentProducts.length > 0 ? (
@@ -254,16 +300,81 @@ export default function RootLayout({ children }) {
             </nav>
           </div>
 
-          {/* ACTION ICONS */}
+          {/* ACTION BAR: SEARCH INPUT BOX, WISHLIST, BAG */}
           <div className="flex items-center gap-3">
-            <Link
-              href="/search"
-              className="p-2 text-gray-700 hover:text-black hover:bg-gray-100 rounded-full transition-colors"
-              title="Search Catalog"
-            >
-              <Search className="w-5 h-5" />
-            </Link>
+            
+            {/* INTERACTIVE SEARCH INPUT CONTAINER */}
+            <div ref={searchContainerRef} className="relative">
+              <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+                <input
+                  type="text"
+                  placeholder="Search footwear, apparel..."
+                  value={searchQuery}
+                  onChange={handleSearchInput}
+                  onFocus={() => setSearchOpen(true)}
+                  className="w-44 sm:w-64 pl-9 pr-8 py-2 bg-[#F5F5F5] border border-[#E5E5E5] focus:border-black rounded-full text-xs font-bold outline-none transition-all focus:w-72"
+                />
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(''); setSearchResults([]); }}
+                    className="absolute right-3 text-gray-400 hover:text-black"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </form>
 
+              {/* INSTANT AUTOCOMPLETE DROPDOWN */}
+              {searchOpen && searchQuery.trim().length > 0 && (
+                <div className="absolute right-0 top-12 w-80 sm:w-96 bg-white border border-[#E5E5E5] shadow-2xl rounded-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex justify-between items-center border-b border-[#E5E5E5] pb-2 mb-3">
+                    <span className="text-[10px] font-mono font-bold uppercase text-gray-400">Quick Results</span>
+                    <span className="text-[10px] font-mono font-bold text-black">{searchResults.length} Found</span>
+                  </div>
+
+                  {searchResults.length > 0 ? (
+                    <div className="space-y-2">
+                      {searchResults.map((prod) => {
+                        const img = prod.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=200&q=80';
+                        return (
+                          <Link
+                            key={prod.id}
+                            href={`/product?slug=${prod.slug}`}
+                            onClick={() => setSearchOpen(false)}
+                            className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 border border-transparent hover:border-[#E5E5E5] transition-all"
+                          >
+                            <div className="w-12 h-12 bg-gray-100 rounded-lg p-1 shrink-0 flex items-center justify-center border">
+                              <img src={img} alt={prod.name} className="object-contain max-h-full max-w-full" />
+                            </div>
+                            <div className="overflow-hidden flex-1">
+                              <div className="text-[10px] font-mono uppercase text-gray-400">{prod.department} // {prod.primary_category}</div>
+                              <div className="font-bold text-xs text-black truncate">{prod.name}</div>
+                              <div className="font-mono text-xs font-bold text-black">${prod.sale_price ?? prod.base_price}</div>
+                            </div>
+                          </Link>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        onClick={handleSearchSubmit}
+                        className="w-full mt-2 py-2 bg-black text-white text-[11px] font-bold uppercase rounded-xl flex items-center justify-center gap-1 hover:bg-gray-800 transition-colors"
+                      >
+                        View All Results for "{searchQuery}" <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-xs text-gray-400 font-mono">
+                      No matching releases for "{searchQuery}"
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* WISHLIST BUTTON */}
             <Link
               href="/wishlist"
               className="p-2 text-gray-700 hover:text-black hover:bg-gray-100 rounded-full transition-colors relative"
@@ -277,6 +388,7 @@ export default function RootLayout({ children }) {
               )}
             </Link>
 
+            {/* CART BAG BUTTON */}
             <Link
               href="/cart"
               className="p-2 text-gray-700 hover:text-black hover:bg-gray-100 rounded-full transition-colors relative"
@@ -290,6 +402,7 @@ export default function RootLayout({ children }) {
               )}
             </Link>
 
+            {/* MOBILE HAMBURGER */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="lg:hidden p-2 text-gray-700 hover:text-black rounded-lg"
@@ -303,6 +416,19 @@ export default function RootLayout({ children }) {
         {mobileMenuOpen && (
           <div className="lg:hidden fixed inset-0 top-25 bg-white z-50 p-6 flex flex-col justify-between border-b border-[#E5E5E5] overflow-y-auto">
             <div className="space-y-4">
+              
+              {/* MOBILE SEARCH INPUT */}
+              <form onSubmit={handleSearchSubmit} className="relative">
+                <input
+                  type="text"
+                  placeholder="Search releases..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-[#F5F5F5] border border-[#E5E5E5] rounded-xl text-xs font-bold outline-none"
+                />
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3.5" />
+              </form>
+
               <div className="text-[10px] font-mono uppercase font-bold text-gray-400">Department Releases</div>
               <div className="flex flex-col space-y-3 text-lg font-black uppercase tracking-tight">
                 {navDepartments.map((dept) => (
