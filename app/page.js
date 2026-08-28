@@ -13,8 +13,6 @@ import {
 } from '@/services/storeService';
 import { 
   Plus, 
-  Sparkles, 
-  ArrowRight,
   Heart,
   Layers,
   Footprints,
@@ -24,10 +22,10 @@ import {
   Crown,
   ChevronLeft,
   ChevronRight,
-  Move,
   RotateCw,
   Pause,
-  Play
+  Play,
+  Tag
 } from 'lucide-react';
 
 function HomeContent() {
@@ -43,13 +41,13 @@ function HomeContent() {
   const [heroProduct, setHeroProduct] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
   
-  // 360 Turntable Variables[cite: 1]
+  // 360 Turntable Variables[cite: 4]
   const [currentAngle, setCurrentAngle] = useState(0);
   const [isAutoRotating, setIsAutoRotating] = useState(true);
   const [loadingAdd, setLoadingAdd] = useState(false);
   const [wishlistIds, setWishlistIds] = useState([]);
 
-  // Loadout Calibration Station State[cite: 1]
+  // Loadout Calibration Station State[cite: 4]
   const [loadoutColor, setLoadoutColor] = useState('Crimson');
   const [loadoutImg, setLoadoutImg] = useState('https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80');
   const [loadoutSize, setLoadoutSize] = useState('10');
@@ -96,7 +94,7 @@ function HomeContent() {
         "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=1000&q=80"
       ];
 
-  // Automatic slow continuous 360° rotation
+  // Automatic slow continuous 360° rotation[cite: 4]
   useEffect(() => {
     if (!isAutoRotating || shoeAngleFrames.length <= 1) return;
     const interval = setInterval(() => {
@@ -173,7 +171,7 @@ function HomeContent() {
     if (activeSub === 'shoes') return p.primary_category === 'shoes';
     if (activeSub === 'clothes') return p.primary_category === 'clothing';
     if (activeSub === 'accessories') return p.primary_category === 'accessories';
-    if (activeSub === 'sale') return p.is_on_sale || (p.sale_price && Number(p.sale_price) < Number(p.base_price));
+    if (activeSub === 'sale') return p.is_on_sale === true || (p.sale_price && Number(p.sale_price) < Number(p.base_price));
     return true;
   });
 
@@ -189,7 +187,7 @@ function HomeContent() {
     <div className="bg-white min-h-screen text-[#111111]">
       <SplashScreen />
 
-      {/* 1. EDITORIAL LIFESTYLE BANNER (ALL RELEASES) */}
+      {/* 1. EDITORIAL LIFESTYLE BANNER (ALL RELEASES)[cite: 4] */}
       {activeDept === 'all' && activeSub === 'all' && (
         <section className="relative w-full h-[420px] bg-black overflow-hidden flex items-center">
           <img 
@@ -214,8 +212,8 @@ function HomeContent() {
         </section>
       )}
 
-      {/* 2. SUB-SECTION TABS STRIP */}
-      <div className="border-b border-[#E5E5E5] bg-[#F9F9F9] sticky top-16 z-30">
+      {/* 2. SUB-SECTION TABS STRIP[cite: 4] */}
+      <div className="border-b border-[#E5E5E5] bg-[#F9F9F9] sticky top-16 z-30 shadow-sm">
         <div className="max-w-[1440px] mx-auto px-6 flex items-center justify-between overflow-x-auto">
           <div className="flex items-center gap-2 py-3">
             {subNavTabs.map((tab) => {
@@ -231,7 +229,7 @@ function HomeContent() {
                       : 'bg-white border border-[#E5E5E5] text-gray-700 hover:border-black'
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
+                  <Icon className={`w-3.5 h-3.5 ${tab.id === 'sale' && !isActive ? 'text-red-600' : ''}`} />
                   {tab.label}
                 </button>
               );
@@ -244,7 +242,7 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* 3. HERO 360° TURNTABLE (ONLY ON ALL ARTICLES VIEW)[cite: 1] */}
+      {/* 3. HERO 360° TURNTABLE (ONLY ON ALL ARTICLES VIEW)[cite: 4] */}
       {activeSub === 'all' && heroProduct && (
         <section id="hero-rotator" className="max-w-[1440px] mx-auto px-6 py-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
@@ -320,13 +318,27 @@ function HomeContent() {
                   <span className="text-xs font-bold uppercase tracking-widest text-[#707072]">
                     {heroProduct.department?.toUpperCase()} // {heroProduct.primary_category?.toUpperCase()}
                   </span>
+                  {heroProduct.sale_price && (
+                    <span className="bg-red-600 text-white text-[9px] font-mono px-2 py-0.5 rounded font-bold flex items-center gap-1">
+                      <Percent className="w-2.5 h-2.5" /> -{Math.round(((heroProduct.base_price - heroProduct.sale_price) / heroProduct.base_price) * 100)}% SALE
+                    </span>
+                  )}
                 </div>
                 <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tight text-black leading-none">
                   {heroProduct.name}
                 </h1>
-                <p className="text-2xl font-bold text-black mt-3 font-mono">
-                  ${selectedVariant?.price_override ?? heroProduct.sale_price ?? heroProduct.base_price}
-                </p>
+
+                <div className="flex items-baseline gap-3 mt-3">
+                  <span className="text-3xl font-black text-black font-mono">
+                    ${selectedVariant?.price_override ?? heroProduct.sale_price ?? heroProduct.base_price}
+                  </span>
+                  {heroProduct.sale_price && (
+                    <span className="text-base text-gray-400 line-through font-mono">
+                      ${heroProduct.base_price}
+                    </span>
+                  )}
+                </div>
+
                 <p className="text-sm text-[#707072] mt-3 leading-relaxed">
                   {heroProduct.short_description || heroProduct.description || 'Constructed with high-tensile Flyknit mesh and pressurized dual Zoom Air units. Engineered for precision energy return and stability.'}
                 </p>
@@ -386,7 +398,7 @@ function HomeContent() {
         </section>
       )}
 
-      {/* 4. FILTERED ARTICLES GRID[cite: 1] */}
+      {/* 4. FILTERED ARTICLES GRID[cite: 4] */}
       <section className="max-w-[1440px] mx-auto px-6 py-12 border-t border-[#E5E5E5]">
         <div className="flex justify-between items-baseline mb-8">
           <div>
@@ -398,7 +410,7 @@ function HomeContent() {
               {activeSub === 'shoes' && `${activeDept.toUpperCase()}'S FOOTWEAR`}
               {activeSub === 'clothes' && `${activeDept.toUpperCase()}'S APPAREL`}
               {activeSub === 'accessories' && `${activeDept.toUpperCase()}'S GEAR`}
-              {activeSub === 'sale' && `${activeDept.toUpperCase()}'S CLEARANCE`}
+              {activeSub === 'sale' && `${activeDept.toUpperCase()}'S CLEARANCE SALES`}
             </h2>
           </div>
           <span className="text-xs font-mono font-bold text-gray-500">{displayedProducts.length} ITEMS</span>
@@ -407,15 +419,14 @@ function HomeContent() {
         {displayedProducts.length === 0 ? (
           <div className="p-16 text-center bg-[#F5F5F5] rounded-3xl border border-[#E5E5E5]">
             <Layers className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <h3 className="font-bold uppercase text-sm">No Articles Found</h3>
-            <p className="text-xs text-gray-500 mt-1">Switch sub-sections or add items in the Admin Panel.</p>
+            <h3 className="font-bold uppercase text-sm">No Articles Found in this Category</h3>
+            <p className="text-xs text-gray-500 mt-1">Check other departments or configure products in the Admin Tower.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {displayedProducts.map((p) => {
               const isLiked = wishlistIds.includes(p.id);
               const mainImg = p.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=700&q=80';
-              const altImg = p.product_images?.[1]?.url || mainImg;
               const discountPct = p.sale_price ? Math.round(((p.base_price - p.sale_price) / p.base_price) * 100) : null;
 
               return (
@@ -431,8 +442,8 @@ function HomeContent() {
                     </Link>
 
                     {discountPct && (
-                      <span className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow">
-                        -{discountPct}% OFF
+                      <span className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow flex items-center gap-0.5">
+                        <Tag className="w-2.5 h-2.5" /> -{discountPct}% OFF
                       </span>
                     )}
 
@@ -454,7 +465,12 @@ function HomeContent() {
                       <h3 className="font-bold text-sm text-black mt-0.5 group-hover:underline truncate">{p.name}</h3>
                     </Link>
                     <div className="flex items-center justify-between mt-2">
-                      <span className="font-mono font-bold text-sm text-black">${p.sale_price ?? p.base_price}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-black">${p.sale_price ?? p.base_price}</span>
+                        {p.sale_price && (
+                          <span className="text-xs text-gray-400 line-through font-mono">${p.base_price}</span>
+                        )}
+                      </div>
                       <button 
                         onClick={async () => {
                           const { id: cartId } = await getCart();
@@ -474,7 +490,7 @@ function HomeContent() {
         )}
       </section>
 
-      {/* 5. LOADOUT ROOM CALIBRATION STATION (MATCHING REFERENCE UI)[cite: 1] */}
+      {/* 5. LOADOUT ROOM CALIBRATION STATION[cite: 4] */}
       {activeDept === 'all' && activeSub === 'all' && (
         <section id="loadout-room" className="py-20 border-t border-[#E5E5E5] bg-[#111111] text-white">
           <div className="max-w-[1440px] mx-auto px-6">

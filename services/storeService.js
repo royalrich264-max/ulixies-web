@@ -513,7 +513,7 @@ export async function getAllCustomers() {
   });
 }
 
-// ================= RETURNS =================
+// ================= RETURNS ENGINE =================
 export async function getAllReturns() {
   const { data, error } = await supabase
     .from('returns')
@@ -536,15 +536,67 @@ export async function updateReturnStatus(returnId, status, notes = '') {
   return data;
 }
 
-export async function createReturnRequest({ order_id, customer_name, customer_email, product_name, variant_size, reason }) {
+export async function submitProductReturn({
+  order_id,
+  order_number,
+  customer_name,
+  customer_email,
+  product_name,
+  variant_size,
+  quantity = 1,
+  refund_amount,
+  reason,
+  details = '',
+  photos = [],
+  return_method = 'Mail return',
+  shipping_payer = 'Customer pays'
+}) {
   const { data, error } = await supabase
     .from('returns')
-    .insert({ order_id, customer_name, customer_email, product_name, variant_size, reason, status: 'requested' })
+    .insert({
+      order_id,
+      order_number,
+      customer_name,
+      customer_email,
+      product_name,
+      variant_size,
+      quantity,
+      refund_amount: Number(refund_amount) || 0,
+      reason,
+      details,
+      photos,
+      return_method,
+      shipping_payer,
+      status: 'requested',
+      created_at: new Date().toISOString()
+    })
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error creating return claim:', error);
+    throw new Error(error.message || 'Failed to submit return request.');
+  }
+
   return data;
+}
+
+export async function uploadReturnPhoto(file) {
+  const fileExt = file.name.split('.').pop();
+  const cleanName = `return-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+  const filePath = `returns/${cleanName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('product-images')
+    .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+  if (uploadError) throw uploadError;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('product-images')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
 }
 
 // ================= REVIEWS =================
