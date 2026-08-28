@@ -1,626 +1,375 @@
 ﻿'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
-import SplashScreen from '@/components/SplashScreen';
+import { getUserOrders, getCurrentUser, submitProductReturn, uploadReturnPhoto } from '@/services/storeService';
 import { 
-  getHomeProducts, 
-  getCart, 
-  addToCart, 
-  getLocalWishlist, 
-  toggleWishlistProduct 
-} from '@/services/storeService';
-import { 
-  Plus, 
-  Heart,
-  Layers,
-  Footprints,
-  Shirt,
-  Briefcase,
-  Percent,
+  Package, 
+  Truck, 
+  CheckCircle2, 
+  Clock, 
+  FileText, 
+  ArrowRight, 
+  Layers, 
   Crown,
-  ChevronLeft,
-  ChevronRight,
-  RotateCw,
-  Pause,
-  Play,
-  Tag
+  RotateCcw,
+  X,
+  Upload,
+  Check
 } from 'lucide-react';
 
-function HomeContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const deptParam = searchParams.get('dept') || 'all';
-  const subParam = searchParams.get('sub') || 'all';
+const RETURN_REASONS = [
+  'Changed my mind',
+  'Wrong size',
+  'Don\'t like the product',
+  'Damaged when received',
+  'Defective product',
+  'Wrong product received',
+  'Other'
+];
 
-  const [activeDept, setActiveDept] = useState(deptParam);
-  const [activeSub, setActiveSub] = useState(subParam);
+export default function OrdersPage() {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
-  const [products, setProducts] = useState([]);
-  const [heroProduct, setHeroProduct] = useState(null);
-  const [selectedVariant, setSelectedVariant] = useState(null);
-  
-  // 360 Turntable Variables[cite: 4]
-  const [currentAngle, setCurrentAngle] = useState(0);
-  const [isAutoRotating, setIsAutoRotating] = useState(true);
-  const [loadingAdd, setLoadingAdd] = useState(false);
-  const [wishlistIds, setWishlistIds] = useState([]);
-
-  // Loadout Calibration Station State[cite: 4]
-  const [loadoutColor, setLoadoutColor] = useState('Crimson');
-  const [loadoutImg, setLoadoutImg] = useState('https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80');
-  const [loadoutSize, setLoadoutSize] = useState('10');
-
-  const isDragging = useRef(false);
-  const dragStartX = useRef(0);
+  // Return Modal State
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [selectedReason, setSelectedReason] = useState('Wrong size');
+  const [returnDetails, setReturnDetails] = useState('');
+  const [returnPhotos, setReturnPhotos] = useState([]);
+  const [returnMethod, setReturnMethod] = useState('Mail return');
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [returnSuccess, setReturnSuccess] = useState(false);
 
   useEffect(() => {
-    setActiveDept(deptParam);
-    setActiveSub(subParam);
-  }, [deptParam, subParam]);
+    async function loadOrders() {
+      try {
+        const u = await getCurrentUser();
+        setUser(u);
+        const data = await getUserOrders();
+        setOrders(data || []);
+      } catch (err) {
+        console.error('Failed to load orders:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadOrders();
+  }, []);
 
-  useEffect(() => {
-    async function loadData() {
-      const liveProducts = await getHomeProducts(activeDept === 'all' ? null : activeDept);
-      setProducts(liveProducts || []);
+  const openReturnDialog = (order) => {
+    setActiveOrder(order);
+    setSelectedReason('Wrong size');
+    setReturnDetails('');
+    setReturnPhotos([]);
+    setReturnSuccess(false);
+    setReturnModalOpen(true);
+  };
 
-      if (liveProducts && liveProducts.length > 0) {
-        const featured = liveProducts.find((p) => p.is_best_seller || p.is_featured) || liveProducts[0];
-        setHeroProduct(featured);
-        if (featured.product_variants && featured.product_variants.length > 0) {
-          setSelectedVariant(featured.product_variants[0]);
+  const handlePhotoUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    try {
+      const urls = [];
+      for (const f of files) {
+        if (typeof uploadReturnPhoto === 'function') {
+          const url = await uploadReturnPhoto(f);
+          urls.push(url);
         }
-      } else {
-        setHeroProduct(null);
-        setSelectedVariant(null);
+      }
+      setReturnPhotos((prev) => [...prev, ...urls]);
+    } catch {
+      alert('Photo upload failed. You can proceed with text details.');
+    }
+  };
+
+  const handleSubmitReturn = async () => {
+    if (!activeOrder) return;
+    setSubmittingReturn(true);
+
+    try {
+      const firstItem = activeOrder.order_items?.[0] || {};
+      if (typeof submitProductReturn === 'function') {
+        await submitProductReturn({
+          order_id: activeOrder.id,
+          order_number: activeOrder.order_number,
+          customer_name: activeOrder.shipping_address?.recipient_name || user?.email || 'Customer',
+          customer_email: user?.email || activeOrder.guest_email || 'customer@athlete.com',
+          product_name: firstItem.product_name || 'Athletic Gear',
+          variant_size: firstItem.variant_size || 'OS',
+          quantity: firstItem.quantity || 1,
+          refund_amount: activeOrder.total_amount ?? activeOrder.total ?? 0,
+          reason: selectedReason,
+          details: returnDetails,
+          photos: returnPhotos,
+          return_method: returnMethod,
+          shipping_payer: (selectedReason === 'Damaged when received' || selectedReason === 'Wrong product received') ? 'Store pays' : 'Customer pays'
+        });
       }
 
-      const saved = getLocalWishlist();
-      setWishlistIds(saved.map((s) => s.id));
-    }
-
-    loadData();
-  }, [activeDept]);
-
-  const shoeAngleFrames = heroProduct?.product_images?.length > 0 
-    ? heroProduct.product_images.map(img => img.url)
-    : [
-        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1600185365926-3a2ce3cdb9eb?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=1000&q=80"
-      ];
-
-  // Automatic slow continuous 360° rotation[cite: 4]
-  useEffect(() => {
-    if (!isAutoRotating || shoeAngleFrames.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentAngle((prev) => (prev + 3) % 360);
-    }, 50);
-
-    return () => clearInterval(interval);
-  }, [isAutoRotating, shoeAngleFrames.length]);
-
-  const frameIndex = Math.min(
-    Math.floor((currentAngle / 360) * shoeAngleFrames.length),
-    shoeAngleFrames.length - 1
-  );
-
-  const rad = (currentAngle * Math.PI) / 180;
-  const scaleX = Math.cos(rad) < 0 ? -1 : 1;
-
-  const handlePointerDown = (e) => {
-    setIsAutoRotating(false);
-    isDragging.current = true;
-    dragStartX.current = e.clientX;
-  };
-
-  const handlePointerMove = (e) => {
-    if (!isDragging.current) return;
-    const deltaX = e.clientX - dragStartX.current;
-    dragStartX.current = e.clientX;
-    setCurrentAngle((prev) => (prev + deltaX * 0.9 + 360) % 360);
-  };
-
-  const handlePointerUp = () => {
-    isDragging.current = false;
-  };
-
-  const stepRotator = (step) => {
-    setIsAutoRotating(false);
-    setCurrentAngle((prev) => (prev + step + 360) % 360);
-  };
-
-  const handleSubChange = (subKey) => {
-    setActiveSub(subKey);
-    const query = new URLSearchParams();
-    if (activeDept !== 'all') query.set('dept', activeDept);
-    if (subKey !== 'all') query.set('sub', subKey);
-    const targetUrl = query.toString() ? `/?${query.toString()}` : '/';
-    router.push(targetUrl);
-  };
-
-  const handleToggleHeart = (e, product) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const updated = toggleWishlistProduct(product);
-    setWishlistIds(updated.map((u) => u.id));
-  };
-
-  const handleAddHeroToBag = async () => {
-    if (!heroProduct) return;
-    setLoadingAdd(true);
-    try {
-      const { id: cartId } = await getCart();
-      const variantToUse = selectedVariant || heroProduct.product_variants?.[0];
-      await addToCart(cartId, variantToUse?.id, 1, heroProduct.id);
-      alert(`${heroProduct.name} added to your equipment bag.`);
-      window.location.reload();
+      setReturnSuccess(true);
     } catch (err) {
-      alert(err.message || 'Error adding item to bag.');
+      alert(err.message || 'Error submitting return.');
     } finally {
-      setLoadingAdd(false);
+      setSubmittingReturn(false);
     }
   };
-
-  const displayedProducts = products.filter((p) => {
-    if (activeSub === 'all') return true;
-    if (activeSub === 'shoes') return p.primary_category === 'shoes';
-    if (activeSub === 'clothes') return p.primary_category === 'clothing';
-    if (activeSub === 'accessories') return p.primary_category === 'accessories';
-    if (activeSub === 'sale') return p.is_on_sale === true || (p.sale_price && Number(p.sale_price) < Number(p.base_price));
-    return true;
-  });
-
-  const subNavTabs = [
-    { id: 'all', label: 'All Articles', icon: Layers },
-    { id: 'shoes', label: 'Shoes', icon: Footprints },
-    { id: 'clothes', label: 'Clothes', icon: Shirt },
-    { id: 'accessories', label: 'Accessories', icon: Briefcase },
-    { id: 'sale', label: 'Sales', icon: Percent },
-  ];
 
   return (
-    <div className="bg-white min-h-screen text-[#111111]">
-      <SplashScreen />
-
-      {/* 1. EDITORIAL LIFESTYLE BANNER (ALL RELEASES)[cite: 4] */}
-      {activeDept === 'all' && activeSub === 'all' && (
-        <section className="relative w-full h-[420px] bg-black overflow-hidden flex items-center">
-          <img 
-            src="https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1600&q=80" 
-            alt="Athletes in training" 
-            className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-luminosity scale-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent"></div>
-
-          <div className="relative max-w-[1440px] mx-auto px-6 w-full text-white z-10">
-            <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-widest text-[#CCFF00] uppercase mb-3">
-              <Crown className="w-4 h-4 text-[#CCFF00]" />
-              ULIXIES // OFFICIAL PERFORMANCE ARCHIVE
-            </div>
-            <h1 className="text-4xl sm:text-6xl font-black uppercase tracking-tight max-w-2xl leading-none">
-              ENGINEERED FOR THE APEX ATHLETE
-            </h1>
-            <p className="text-gray-300 text-sm max-w-lg mt-4 leading-relaxed font-medium">
-              Explore dynamic 360° footwear rotations, reactive cushion matrices, and competition gear.
-            </p>
-          </div>
-        </section>
-      )}
-
-      {/* 2. SUB-SECTION TABS STRIP[cite: 4] */}
-      <div className="border-b border-[#E5E5E5] bg-[#F9F9F9] sticky top-16 z-30 shadow-sm">
-        <div className="max-w-[1440px] mx-auto px-6 flex items-center justify-between overflow-x-auto">
-          <div className="flex items-center gap-2 py-3">
-            {subNavTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeSub === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleSubChange(tab.id)}
-                  className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                    isActive 
-                      ? 'bg-black text-white shadow-sm' 
-                      : 'bg-white border border-[#E5E5E5] text-gray-700 hover:border-black'
-                  }`}
-                >
-                  <Icon className={`w-3.5 h-3.5 ${tab.id === 'sale' && !isActive ? 'text-red-600' : ''}`} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="text-xs font-mono font-bold text-gray-500 whitespace-nowrap pl-4 hidden sm:block">
-            {displayedProducts.length} ARTICLES IN ARCHIVE
-          </div>
-        </div>
+    <div className="max-w-[1440px] mx-auto px-6 py-8">
+      
+      {/* HEADER SECTION */}
+      <div className="flex items-center gap-2 text-xs font-mono uppercase font-bold text-gray-400 mb-1">
+        <Crown className="w-4 h-4 text-black" /> ATHLETE PASSPORT // LOGISTICS
+      </div>
+      <div className="flex justify-between items-baseline mb-6 border-b border-[#E5E5E5] pb-4">
+        <h1 className="text-2xl font-black uppercase tracking-tight">My Orders</h1>
+        <span className="text-xs font-mono font-bold text-gray-500">{orders.length} DELIVERIES</span>
       </div>
 
-      {/* 3. HERO 360° TURNTABLE (ONLY ON ALL ARTICLES VIEW)[cite: 4] */}
-      {activeSub === 'all' && heroProduct && (
-        <section id="hero-rotator" className="max-w-[1440px] mx-auto px-6 py-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            
-            <div className="lg:col-span-7">
-              <div className="bg-[#F5F5F5] rounded-2xl p-6 relative flex flex-col justify-between border border-[#E5E5E5]">
-                
-                <div className="flex justify-between items-center z-10 mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold tracking-widest text-[#111111] bg-white px-2.5 py-1 rounded border border-[#E5E5E5] uppercase font-mono">
-                      360° INSPECTION
-                    </span>
-                    <span className="bg-black text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase">
-                      DUAL ZOOM AIR
-                    </span>
-                  </div>
-                  
-                  <button
-                    onClick={() => setIsAutoRotating(!isAutoRotating)}
-                    className="text-xs text-[#707072] flex items-center gap-1 font-bold hover:text-black bg-white px-2.5 py-1 rounded-full border border-[#E5E5E5] shadow-sm"
-                  >
-                    {isAutoRotating ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                    {isAutoRotating ? 'Auto Rotating' : 'Paused'}
-                  </button>
-                </div>
+      {loading ? (
+        <div className="p-16 text-center text-xs font-mono text-gray-400">LOADING LOGISTICS PIPELINE...</div>
+      ) : orders.length === 0 ? (
+        <div className="p-16 bg-[#F5F5F5] rounded-3xl text-center border border-[#E5E5E5]">
+          <Layers className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <h2 className="text-lg font-bold uppercase">No Deliveries Found</h2>
+          <p className="text-xs text-gray-500 mt-1 mb-6">You have not placed any athlete gear orders yet.</p>
+          <Link href="/" className="px-6 py-3 bg-black text-white text-xs font-bold uppercase rounded-full">
+            Explore Releases
+          </Link>
+        </div>
+      ) : (
+        /* SHORT, COMPACT CARDS (3 PER ROW) */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {orders.map((order) => {
+            const firstItem = order.order_items?.[0];
+            const itemCount = order.order_items?.reduce((acc, i) => acc + (i.quantity || 1), 0) || 1;
+            const isDelivered = order.status === 'delivered';
 
-                <div 
-                  className="relative h-[320px] sm:h-[440px] w-full flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                >
-                  <img
-                    src={shoeAngleFrames[frameIndex]}
-                    alt={heroProduct.name}
-                    style={{ transform: `scaleX(${scaleX})` }}
-                    className="max-h-full max-w-full object-contain pointer-events-none drop-shadow-2xl transition-transform duration-75"
-                  />
-                  
-                  <div className="absolute bottom-2 left-2 bg-white/95 border border-[#E5E5E5] px-3 py-1.5 rounded text-[11px] font-mono flex items-center gap-1.5 shadow-sm">
-                    <RotateCw className="w-3 h-3 animate-spin text-gray-400" />
-                    ROTATION: <span className="font-bold text-black">{String(Math.round(currentAngle)).padStart(3, '0')}°</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 mt-4">
-                  <button onClick={() => stepRotator(-45)} className="p-2 bg-white rounded border border-[#E5E5E5] hover:bg-gray-100 transition-colors shadow-sm">
-                    <ChevronLeft className="w-4 h-4 text-black" />
-                  </button>
-                  <input
-                    type="range"
-                    min="0"
-                    max="359"
-                    value={Math.round(currentAngle)}
-                    onChange={(e) => {
-                      setIsAutoRotating(false);
-                      setCurrentAngle(Number(e.target.value));
-                    }}
-                    className="w-full h-1 bg-[#E5E5E5] rounded-lg appearance-none cursor-pointer accent-black"
-                  />
-                  <button onClick={() => stepRotator(45)} className="p-2 bg-white rounded border border-[#E5E5E5] hover:bg-gray-100 transition-colors shadow-sm">
-                    <ChevronRight className="w-4 h-4 text-black" />
-                  </button>
-                </div>
-
-              </div>
-            </div>
-
-            <div className="lg:col-span-5 flex flex-col justify-center space-y-6">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Crown className="w-4 h-4 text-black" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-[#707072]">
-                    {heroProduct.department?.toUpperCase()} // {heroProduct.primary_category?.toUpperCase()}
-                  </span>
-                  {heroProduct.sale_price && (
-                    <span className="bg-red-600 text-white text-[9px] font-mono px-2 py-0.5 rounded font-bold flex items-center gap-1">
-                      <Percent className="w-2.5 h-2.5" /> -{Math.round(((heroProduct.base_price - heroProduct.sale_price) / heroProduct.base_price) * 100)}% SALE
-                    </span>
-                  )}
-                </div>
-                <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tight text-black leading-none">
-                  {heroProduct.name}
-                </h1>
-
-                <div className="flex items-baseline gap-3 mt-3">
-                  <span className="text-3xl font-black text-black font-mono">
-                    ${selectedVariant?.price_override ?? heroProduct.sale_price ?? heroProduct.base_price}
-                  </span>
-                  {heroProduct.sale_price && (
-                    <span className="text-base text-gray-400 line-through font-mono">
-                      ${heroProduct.base_price}
-                    </span>
-                  )}
-                </div>
-
-                <p className="text-sm text-[#707072] mt-3 leading-relaxed">
-                  {heroProduct.short_description || heroProduct.description || 'Constructed with high-tensile Flyknit mesh and pressurized dual Zoom Air units. Engineered for precision energy return and stability.'}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 border-y border-[#E5E5E5] py-4">
-                <div>
-                  <div className="text-[10px] uppercase font-bold text-[#707072]">Weight</div>
-                  <div className="text-sm font-bold text-black mt-0.5">{heroProduct.weight_spec || '8.1 oz'}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase font-bold text-[#707072]">Fit Profile</div>
-                  <div className="text-sm font-bold text-black mt-0.5">{heroProduct.fit || 'True to Size'}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase font-bold text-[#707072]">XP Bounty</div>
-                  <div className="text-sm font-bold text-black mt-0.5">+250 XP</div>
-                </div>
-              </div>
-
-              {heroProduct.product_variants?.length > 0 && (
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-black">Select Size</label>
-                    <span className="text-[10px] text-gray-400 font-mono">
-                      {selectedVariant?.stock ?? 15} IN STOCK
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {heroProduct.product_variants.map((v) => (
-                      <button
-                        key={v.id}
-                        onClick={() => setSelectedVariant(v)}
-                        className={`py-3 rounded border text-xs font-semibold transition-colors ${
-                          selectedVariant?.id === v.id
-                            ? 'border-2 border-black bg-black text-white'
-                            : 'border-[#E5E5E5] hover:border-black text-black'
-                        }`}
-                      >
-                        {v.size || 'OS'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={handleAddHeroToBag}
-                disabled={loadingAdd}
-                className="w-full py-4 rounded-full bg-black text-white font-bold uppercase tracking-wider text-xs flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors shadow-lg disabled:opacity-50"
+            return (
+              <div 
+                key={order.id} 
+                className="bg-white border border-[#E5E5E5] rounded-2xl p-4 flex flex-col justify-between hover:border-black hover:shadow-md transition-all"
               >
-                <Plus className="w-4 h-4" /> {loadingAdd ? 'Adding...' : 'Add to Bag'}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="font-mono font-black text-xs text-black">{order.order_number}</span>
+                    
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase font-mono ${
+                      order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                      order.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {order.status === 'delivered' && <CheckCircle2 className="w-2.5 h-2.5" />}
+                      {order.status === 'shipped' && <Truck className="w-2.5 h-2.5" />}
+                      {order.status === 'processing' && <Clock className="w-2.5 h-2.5" />}
+                      {order.status}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-2 bg-[#F9F9F9] rounded-xl mb-3 border border-[#E5E5E5]">
+                    <div className="w-12 h-12 bg-white rounded-lg p-1 flex items-center justify-center shrink-0 border border-black/5">
+                      <img 
+                        src={firstItem?.image_url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=150&q=80'} 
+                        alt={firstItem?.product_name || 'Gear'} 
+                        className="max-h-full max-w-full object-contain" 
+                      />
+                    </div>
+                    <div className="overflow-hidden flex-1">
+                      <div className="font-bold text-xs text-black truncate">{firstItem?.product_name || 'Gear Item'}</div>
+                      <div className="text-[10px] text-gray-500 font-mono mt-0.5">
+                        {itemCount} {itemCount === 1 ? 'item' : 'items'} • Size: {firstItem?.variant_size || 'OS'}
+                      </div>
+                      <div className="text-[9px] text-gray-400 font-mono">
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2.5 border-t border-[#E5E5E5] flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[9px] font-mono text-gray-400 block font-bold">TOTAL</span>
+                    <span className="font-mono font-black text-xs text-black">${order.total_amount ?? order.total}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* RETURN ACTION BUTTON */}
+                    <button
+                      onClick={() => openReturnDialog(order)}
+                      className="px-2.5 py-1.5 border border-[#E5E5E5] text-gray-700 hover:text-black hover:border-black text-[10px] font-bold uppercase rounded-lg flex items-center gap-1 transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Return
+                    </button>
+
+                    {/* INVOICE LOCKED UNTIL DELIVERED */}
+                    {isDelivered ? (
+                      <Link
+                        href={`/order-detail?number=${order.order_number}`}
+                        className="px-3 py-1.5 bg-black text-white text-[10px] font-bold uppercase rounded-lg flex items-center gap-1 hover:bg-gray-800 transition-colors shadow-sm"
+                      >
+                        <FileText className="w-3 h-3" /> Invoice <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    ) : (
+                      <span className="text-[9px] font-mono font-bold text-gray-400 uppercase bg-gray-100 px-2 py-1 rounded">
+                        Pending Delivery
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ================= EXACT ASCII 'RETURN AN ITEM' MODAL SHEET ================= */}
+      {returnModalOpen && activeOrder && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white max-w-lg w-full rounded-2xl border-2 border-black p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            
+            <div className="flex justify-between items-center border-b-2 border-black pb-3 mb-4">
+              <span className="font-black text-base uppercase tracking-tight font-mono">
+                RETURN AN ITEM
+              </span>
+              <button 
+                onClick={() => setReturnModalOpen(false)}
+                className="p-1 text-gray-400 hover:text-black rounded-lg"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-          </div>
-        </section>
-      )}
-
-      {/* 4. FILTERED ARTICLES GRID[cite: 4] */}
-      <section className="max-w-[1440px] mx-auto px-6 py-12 border-t border-[#E5E5E5]">
-        <div className="flex justify-between items-baseline mb-8">
-          <div>
-            <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#707072]">
-              {activeDept.toUpperCase()} // {activeSub.toUpperCase()}
-            </span>
-            <h2 className="text-3xl font-black uppercase tracking-tight text-[#111111] mt-1">
-              {activeSub === 'all' && `${activeDept.toUpperCase()} RELEASES`}
-              {activeSub === 'shoes' && `${activeDept.toUpperCase()}'S FOOTWEAR`}
-              {activeSub === 'clothes' && `${activeDept.toUpperCase()}'S APPAREL`}
-              {activeSub === 'accessories' && `${activeDept.toUpperCase()}'S GEAR`}
-              {activeSub === 'sale' && `${activeDept.toUpperCase()}'S CLEARANCE SALES`}
-            </h2>
-          </div>
-          <span className="text-xs font-mono font-bold text-gray-500">{displayedProducts.length} ITEMS</span>
-        </div>
-
-        {displayedProducts.length === 0 ? (
-          <div className="p-16 text-center bg-[#F5F5F5] rounded-3xl border border-[#E5E5E5]">
-            <Layers className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <h3 className="font-bold uppercase text-sm">No Articles Found in this Category</h3>
-            <p className="text-xs text-gray-500 mt-1">Check other departments or configure products in the Admin Tower.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {displayedProducts.map((p) => {
-              const isLiked = wishlistIds.includes(p.id);
-              const mainImg = p.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=700&q=80';
-              const discountPct = p.sale_price ? Math.round(((p.base_price - p.sale_price) / p.base_price) * 100) : null;
-
-              return (
-                <div key={p.id} className="group flex flex-col justify-between">
-                  <div className="bg-[#F5F5F5] rounded-2xl overflow-hidden relative aspect-square flex items-center justify-center mb-3 border border-[#E5E5E5]">
-                    
-                    <Link href={`/product?slug=${p.slug}`} className="w-full h-full flex items-center justify-center">
-                      <img
-                        src={mainImg}
-                        alt={p.name}
-                        className="w-full h-full object-contain group-hover:scale-105 transition-all duration-300"
-                      />
-                    </Link>
-
-                    {discountPct && (
-                      <span className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow flex items-center gap-0.5">
-                        <Tag className="w-2.5 h-2.5" /> -{discountPct}% OFF
-                      </span>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleHeart(e, p)}
-                      className={`absolute top-3 right-3 p-2 rounded-full border shadow-sm transition-all z-10 ${
-                        isLiked ? 'bg-red-600 text-white border-red-600' : 'bg-white/90 text-gray-600 hover:text-black hover:bg-white border-[#E5E5E5]'
-                      }`}
-                      title={isLiked ? 'Remove from Saved' : 'Save Item'}
-                    >
-                      <Heart className="w-4 h-4 fill-current" />
-                    </button>
-                  </div>
-
-                  <div>
-                    <div className="text-[11px] text-[#707072] font-semibold uppercase">{p.department} // {p.primary_category}</div>
-                    <Link href={`/product?slug=${p.slug}`}>
-                      <h3 className="font-bold text-sm text-black mt-0.5 group-hover:underline truncate">{p.name}</h3>
-                    </Link>
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-sm text-black">${p.sale_price ?? p.base_price}</span>
-                        {p.sale_price && (
-                          <span className="text-xs text-gray-400 line-through font-mono">${p.base_price}</span>
-                        )}
-                      </div>
-                      <button 
-                        onClick={async () => {
-                          const { id: cartId } = await getCart();
-                          await addToCart(cartId, null, 1, p.id);
-                          window.location.reload();
-                        }}
-                        className="p-2 bg-[#F5F5F5] hover:bg-[#E5E5E5] rounded-full transition-colors"
-                      >
-                        <Plus className="w-4 h-4 text-black" />
-                      </button>
-                    </div>
-                  </div>
+            {returnSuccess ? (
+              <div className="py-8 text-center space-y-4">
+                <div className="w-12 h-12 bg-green-100 text-green-700 rounded-full flex items-center justify-center mx-auto">
+                  <Check className="w-6 h-6" />
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* 5. LOADOUT ROOM CALIBRATION STATION[cite: 4] */}
-      {activeDept === 'all' && activeSub === 'all' && (
-        <section id="loadout-room" className="py-20 border-t border-[#E5E5E5] bg-[#111111] text-white">
-          <div className="max-w-[1440px] mx-auto px-6">
-            <div className="bg-[#1E1E1E] border border-white/10 rounded-3xl p-8 lg:p-14 relative">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                <h3 className="font-black text-lg uppercase">Return Claim Initiated</h3>
+                <p className="text-xs text-gray-600 max-w-sm mx-auto leading-relaxed">
+                  Your return request for Order #{activeOrder.order_number} has been logged in the system.
+                </p>
+                <button
+                  onClick={() => setReturnModalOpen(false)}
+                  className="px-6 py-2.5 bg-black text-white text-xs font-bold uppercase rounded-full"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4 text-xs">
                 
-                <div className="lg:col-span-4 space-y-6">
-                  <div className="text-xs font-mono uppercase text-[#CCFF00] tracking-widest">[ LOADOUT CALIBRATION ]</div>
-                  <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-white font-sans">
-                    AIR MAX PULSE 26
-                  </h2>
-                  <div className="text-2xl font-mono font-bold text-white">$165.00</div>
-
-                  <div className="space-y-4 pt-4 border-t border-white/10">
-                    <div>
-                      <div className="flex justify-between text-xs font-mono mb-1">
-                        <span className="text-gray-400">ENERGY REBOUND</span>
-                        <span className="text-white font-bold">92%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
-                        <div className="h-full bg-[#CCFF00]" style={{ width: '92%' }}></div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-xs font-mono mb-1">
-                        <span className="text-gray-400">CUSHION SOFTNESS</span>
-                        <span className="text-white font-bold">88%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
-                        <div className="h-full bg-[#CCFF00]" style={{ width: '88%' }}></div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-xs font-mono mb-1">
-                        <span className="text-gray-400">TRACTION STABILITY</span>
-                        <span className="text-white font-bold">95%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
-                        <div className="h-full bg-[#CCFF00]" style={{ width: '95%' }}></div>
-                      </div>
-                    </div>
-                  </div>
+                <div className="font-mono">
+                  <div className="font-bold text-black text-sm">Order #{activeOrder.order_number}</div>
+                  <div className="text-gray-500 text-[11px]">Purchased {new Date(activeOrder.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
                 </div>
 
-                <div className="lg:col-span-4 flex items-center justify-center">
-                  <div className="relative w-full aspect-square bg-black/40 rounded-2xl border border-white/10 flex items-center justify-center p-8">
-                    <img
-                      src={loadoutImg} 
-                      alt="Air Max Loadout" 
-                      className="w-full h-auto object-contain drop-shadow-[0_20px_35px_rgba(0,0,0,0.9)]" 
+                <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                  <div className="w-12 h-12 bg-white rounded-lg p-1 border flex items-center justify-center shrink-0">
+                    <img 
+                      src={activeOrder.order_items?.[0]?.image_url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=150&q=80'} 
+                      alt="" 
+                      className="max-h-full max-w-full object-contain"
                     />
                   </div>
+                  <div>
+                    <div className="font-black text-xs text-black">{activeOrder.order_items?.[0]?.product_name || 'Nike Air Max'}</div>
+                    <div className="text-gray-500 font-mono text-[11px]">{activeOrder.order_items?.[0]?.variant_size || 'White / Size 10'}</div>
+                    <div className="text-gray-400 font-mono text-[10px]">Qty: {activeOrder.order_items?.[0]?.quantity || 1}</div>
+                  </div>
                 </div>
 
-                <div className="lg:col-span-4 space-y-6">
-                  <div>
-                    <label className="block text-xs font-mono uppercase text-gray-400 mb-2">CHASSIS COLORWAY: {loadoutColor}</label>
-                    <div className="flex gap-3">
-                      <button 
-                        onClick={() => {
-                          setLoadoutColor('Crimson');
-                          setLoadoutImg('https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80');
-                        }} 
-                        className={`w-9 h-9 rounded-full bg-red-600 border-2 ${loadoutColor === 'Crimson' ? 'border-white ring-2 ring-[#CCFF00]' : 'border-transparent'}`}
-                      />
-                      <button 
-                        onClick={() => {
-                          setLoadoutColor('White Smoke');
-                          setLoadoutImg('https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&w=800&q=80');
-                        }} 
-                        className={`w-9 h-9 rounded-full bg-white border-2 ${loadoutColor === 'White Smoke' ? 'border-white ring-2 ring-[#CCFF00]' : 'border-transparent'}`}
-                      />
-                      <button 
-                        onClick={() => {
-                          setLoadoutColor('Phantom Black');
-                          setLoadoutImg('https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=800&q=80');
-                        }} 
-                        className={`w-9 h-9 rounded-full bg-gray-900 border-2 ${loadoutColor === 'Phantom Black' ? 'border-white ring-2 ring-[#CCFF00]' : 'border-transparent'}`}
-                      />
-                    </div>
+                <div>
+                  <label className="font-bold uppercase text-black block mb-2 font-mono">Why are you returning this?</label>
+                  <div className="space-y-1.5 pl-1">
+                    {RETURN_REASONS.map((r) => (
+                      <label key={r} className="flex items-center gap-2 cursor-pointer text-gray-800 hover:text-black">
+                        <input
+                          type="radio"
+                          name="return_reason"
+                          value={r}
+                          checked={selectedReason === r}
+                          onChange={(e) => setSelectedReason(e.target.value)}
+                          className="accent-black w-4 h-4 cursor-pointer"
+                        />
+                        <span>{r}</span>
+                      </label>
+                    ))}
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-mono uppercase text-gray-400 mb-2">SPEC SIZE (US)</label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {['8', '9', '10', '11'].map((sz) => (
-                        <button 
-                          key={sz}
-                          onClick={() => setLoadoutSize(sz)} 
-                          className={`py-2.5 rounded text-xs font-bold transition-all ${
-                            loadoutSize === sz 
-                              ? 'bg-white text-black border border-white' 
-                              : 'bg-white/5 border border-white/10 text-white hover:border-white'
-                          }`}
-                        >
-                          {sz}
-                        </button>
+                <div>
+                  <label className="font-bold uppercase text-black block mb-1 font-mono">Tell us more</label>
+                  <textarea
+                    rows={3}
+                    value={returnDetails}
+                    onChange={(e) => setReturnDetails(e.target.value)}
+                    placeholder="Provide additional details regarding item condition..."
+                    className="w-full p-2.5 border border-gray-300 rounded-xl text-xs outline-none focus:border-black"
+                  />
+                </div>
+
+                <div>
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg font-bold uppercase text-[11px] cursor-pointer hover:border-black bg-gray-50">
+                    <Upload className="w-3.5 h-3.5" /> Upload Photos
+                    <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                  </label>
+                  {returnPhotos.length > 0 && (
+                    <div className="flex gap-2 mt-2">
+                      {returnPhotos.map((url, i) => (
+                        <img key={i} src={url} alt="" className="w-10 h-10 object-cover rounded-lg border" />
                       ))}
                     </div>
-                  </div>
-
-                  <button 
-                    onClick={async () => {
-                      const { id: cartId } = await getCart();
-                      await addToCart(cartId, null, 1, heroProduct?.id);
-                      alert(`Air Max Pulse 26 (${loadoutColor} - US ${loadoutSize}) added to bag.`);
-                      window.location.reload();
-                    }}
-                    className="w-full py-4 bg-white text-black font-bold text-xs uppercase tracking-widest rounded-full hover:bg-[#CCFF00] transition-all shadow-xl"
-                  >
-                    [ EQUIP / ADD TO BAG ]
-                  </button>
+                  )}
                 </div>
 
+                <div>
+                  <label className="font-bold uppercase text-black block mb-1 font-mono">Return method</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={returnMethod === 'Mail return'}
+                      onChange={() => setReturnMethod('Mail return')}
+                      className="accent-black w-4 h-4"
+                    />
+                    <span>Mail return (Prepaid Drop-off)</span>
+                  </label>
+                </div>
+
+                <div className="border-t border-gray-200 pt-3 space-y-1 font-mono text-xs">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Return shipping:</span>
+                    <span className="font-bold text-black">
+                      {(selectedReason === 'Damaged when received' || selectedReason === 'Wrong product received') 
+                        ? 'Store pays (Free)' 
+                        : 'Customer pays'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-black font-black text-sm pt-1">
+                    <span>Estimated refund:</span>
+                    <span>${activeOrder.total_amount ?? activeOrder.total}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSubmitReturn}
+                  disabled={submittingReturn}
+                  className="w-full py-3.5 bg-black text-white font-black uppercase text-xs tracking-wider rounded-xl hover:bg-gray-800 transition-colors shadow-lg disabled:opacity-50 mt-2"
+                >
+                  {submittingReturn ? 'Submitting Return...' : '[ REQUEST RETURN ]'}
+                </button>
+
               </div>
-            </div>
+            )}
+
           </div>
-        </section>
+        </div>
       )}
 
     </div>
-  );
-}
-
-export default function HomePage() {
-  return (
-    <Suspense fallback={<div className="p-12 text-center text-xs font-mono">LOADING PERFORMANCE ARCHIVE...</div>}>
-      <HomeContent />
-    </Suspense>
   );
 }

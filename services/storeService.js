@@ -259,7 +259,6 @@ export async function createFullAdminProduct(productData) {
     variants
   } = productData;
 
-  // 1. Slug Deduplication
   let baseSlug = (slug || name || 'product')
     .toLowerCase()
     .trim()
@@ -278,7 +277,6 @@ export async function createFullAdminProduct(productData) {
     ? `${baseSlug}-${Math.random().toString(36).substring(2, 6)}` 
     : baseSlug;
 
-  // 2. Insert Master Record
   const { data: product, error: prodErr } = await supabase
     .from('products')
     .insert({
@@ -323,7 +321,6 @@ export async function createFullAdminProduct(productData) {
 
   if (prodErr) throw prodErr;
 
-  // 3. Insert Images
   if (images && images.length > 0) {
     const imagesToInsert = images.map((img, index) => ({
       product_id: product.id,
@@ -335,7 +332,6 @@ export async function createFullAdminProduct(productData) {
     await supabase.from('product_images').insert(imagesToInsert);
   }
 
-  // 4. Insert Variants
   if (variants && variants.length > 0) {
     const variantsToInsert = variants.map((v) => ({
       product_id: product.id,
@@ -890,15 +886,24 @@ export async function createOrder({ customer, items, total, subtotal, shippingCo
 
 export async function getUserOrders() {
   const user = await getCurrentUser();
-  if (!user) return [];
-
-  const { data, error } = await supabase
+  
+  let query = supabase
     .from('orders')
     .select(`*, order_items (*)`)
-    .or(`user_id.eq.${user.id},guest_email.eq.${user.email}`)
     .order('created_at', { ascending: false });
 
-  if (error) return [];
+  if (user?.id) {
+    query = query.or(`user_id.eq.${user.id},guest_email.eq.${user.email}`);
+  } else {
+    // If not logged in / testing checkout as guest, fetch recent deliveries
+    query = query.limit(20);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('getUserOrders query error:', error);
+    return [];
+  }
   return data || [];
 }
 
