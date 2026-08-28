@@ -7,6 +7,11 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Outfit', 'Plus Jakarta Sans', '-apple-system', 'sans-serif'],
+        display: ['Outfit', 'sans-serif'],
+        sports: ['Outfit', 'sans-serif'],
+      },
       colors: {
         nike: {
           black: '#111111',

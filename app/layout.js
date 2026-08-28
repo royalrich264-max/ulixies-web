@@ -18,7 +18,12 @@ export default function RootLayout({ children }) {
 
   return (
     <html lang="en">
-      <body className="bg-white text-[#111111] antialiased min-h-screen flex flex-col justify-between">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+      </head>
+      <body className="bg-white text-[#111111] antialiased min-h-screen flex flex-col justify-between font-sans">
         {/* Global Navbar */}
         <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-[#E5E5E5] px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8">
