@@ -352,12 +352,15 @@ function HomeContent() {
     }
   };
 
+  // Filter products by subcategory or active sales discount
   const displayedProducts = products.filter((p) => {
+    const hasDiscount = p.is_on_sale === true || (p.sale_price && Number(p.sale_price) < Number(p.base_price));
+    
     let matchesSub = true;
     if (activeSub === 'shoes') matchesSub = p.primary_category === 'shoes';
     else if (activeSub === 'clothes') matchesSub = p.primary_category === 'clothing';
     else if (activeSub === 'accessories') matchesSub = p.primary_category === 'accessories';
-    else if (activeSub === 'sale') matchesSub = p.is_on_sale === true || (p.sale_price && Number(p.sale_price) < Number(p.base_price));
+    else if (activeSub === 'sale') matchesSub = hasDiscount;
 
     if (!matchesSub) return false;
 
@@ -381,6 +384,9 @@ function HomeContent() {
   const currentHeroBanner = HERO_BANNER_CONFIG[activeDept]?.[activeSub] || 
                             HERO_BANNER_CONFIG['all']?.[activeSub] || 
                             HERO_BANNER_CONFIG['all']['all'];
+
+  const heroHasDiscount = heroProduct?.sale_price && Number(heroProduct.sale_price) < Number(heroProduct.base_price);
+  const heroDiscountPct = heroHasDiscount ? Math.round(((heroProduct.base_price - heroProduct.sale_price) / heroProduct.base_price) * 100) : null;
 
   return (
     <div className="bg-white min-h-screen text-[#111111]">
@@ -448,7 +454,7 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* 3. HERO 360° TURNTABLE (ONLY ON ALL ARTICLES VIEW)[cite: 7] */}
+      {/* 3. HERO 360° TURNTABLE (ONLY ON ALL ARTICLES VIEW) */}
       {activeSub === 'all' && heroProduct && (
         <section id="hero-rotator" className="max-w-[1440px] mx-auto px-6 py-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
@@ -524,9 +530,9 @@ function HomeContent() {
                   <span className="text-xs font-bold uppercase tracking-widest text-[#707072]">
                     {heroProduct.department?.toUpperCase()} // {heroProduct.primary_category?.toUpperCase()}
                   </span>
-                  {heroProduct.sale_price && (
+                  {heroHasDiscount && (
                     <span className="bg-red-600 text-white text-[9px] font-mono px-2 py-0.5 rounded font-bold flex items-center gap-1">
-                      <Percent className="w-2.5 h-2.5" /> -{Math.round(((heroProduct.base_price - heroProduct.sale_price) / heroProduct.base_price) * 100)}% SALE
+                      <Percent className="w-2.5 h-2.5" /> -{heroDiscountPct}% SALE
                     </span>
                   )}
                 </div>
@@ -536,9 +542,9 @@ function HomeContent() {
 
                 <div className="flex items-baseline gap-3 mt-3">
                   <span className="text-3xl font-black text-black font-mono">
-                    ${selectedVariant?.price_override ?? heroProduct.sale_price ?? heroProduct.base_price}
+                    ${selectedVariant?.price_override ?? (heroHasDiscount ? heroProduct.sale_price : heroProduct.base_price)}
                   </span>
-                  {heroProduct.sale_price && (
+                  {heroHasDiscount && (
                     <span className="text-base text-gray-400 line-through font-mono">
                       ${heroProduct.base_price}
                     </span>
@@ -595,7 +601,7 @@ function HomeContent() {
                 <div>
                   <div className="text-xs font-black uppercase text-black font-mono">Quantity</div>
                   <div className="text-[10px] text-gray-400 font-mono">
-                    Total: ${( (selectedVariant?.price_override ?? heroProduct.sale_price ?? heroProduct.base_price) * heroQuantity ).toFixed(2)}
+                    Total: ${( (selectedVariant?.price_override ?? (heroHasDiscount ? heroProduct.sale_price : heroProduct.base_price)) * heroQuantity ).toFixed(2)}
                   </div>
                 </div>
 
@@ -635,9 +641,7 @@ function HomeContent() {
         </section>
       )}
 
-      {/* ─────────────────────────────────────────────────────────── */}
-      {/* 4. MAIN STORE LAYOUT: VERTICAL ACTIVITIES SIDEBAR + GRID    */}
-      {/* ─────────────────────────────────────────────────────────── */}
+      {/* 4. MAIN STORE LAYOUT */}
       <section className="max-w-[1440px] mx-auto px-6 py-12 border-t border-[#E5E5E5]">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           
@@ -645,7 +649,7 @@ function HomeContent() {
           <aside className="lg:col-span-3 space-y-6 lg:sticky lg:top-36 bg-white p-5 rounded-2xl border border-[#E5E5E5] shadow-sm">
             <div>
               <div className="flex items-center gap-2 text-xs font-mono font-bold text-gray-400 uppercase mb-1">
-                <Flame className="w-3.5 h-3.5 text-black" /> ACTIVITY SPECIFICATION[cite: 7]
+                <Flame className="w-3.5 h-3.5 text-black" /> ACTIVITY SPECIFICATION
               </div>
               <h3 className="text-lg font-black uppercase tracking-tight text-black">
                 {activeSub !== 'all' ? `${activeSub.toUpperCase()} ACTIVITIES` : 'DISCIPLINES'}
@@ -731,7 +735,7 @@ function HomeContent() {
         </div>
       </section>
 
-      {/* 5. LOADOUT ROOM CALIBRATION STATION[cite: 7] */}
+      {/* 5. LOADOUT ROOM CALIBRATION STATION */}
       {activeDept === 'all' && activeSub === 'all' && (
         <section id="loadout-room" className="py-20 border-t border-[#E5E5E5] bg-[#111111] text-white">
           <div className="max-w-[1440px] mx-auto px-6">
@@ -892,7 +896,14 @@ function HomeContent() {
 function renderProductCard(p, wishlistIds, handleToggleHeart) {
   const isLiked = wishlistIds.includes(p.id);
   const mainImg = p.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=700&q=80';
-  const discountPct = p.sale_price ? Math.round(((p.base_price - p.sale_price) / p.base_price) * 100) : null;
+  
+  // Real dynamic sale detection
+  const hasDiscount = p.sale_price && Number(p.sale_price) < Number(p.base_price);
+  const discountPct = hasDiscount 
+    ? Math.round(((Number(p.base_price) - Number(p.sale_price)) / Number(p.base_price)) * 100) 
+    : null;
+
+  const currentPrice = hasDiscount ? p.sale_price : p.base_price;
 
   return (
     <div key={p.id} className="group flex flex-col justify-between">
@@ -906,7 +917,8 @@ function renderProductCard(p, wishlistIds, handleToggleHeart) {
           />
         </Link>
 
-        {discountPct && (
+        {/* Dynamic Discount Tag */}
+        {hasDiscount && discountPct > 0 && (
           <span className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow flex items-center gap-0.5">
             <Tag className="w-2.5 h-2.5" /> -{discountPct}% OFF
           </span>
@@ -934,8 +946,8 @@ function renderProductCard(p, wishlistIds, handleToggleHeart) {
         </Link>
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-2">
-            <span className="font-mono font-bold text-sm text-black">${p.sale_price ?? p.base_price}</span>
-            {p.sale_price && (
+            <span className="font-mono font-bold text-sm text-black">${currentPrice}</span>
+            {hasDiscount && (
               <span className="text-xs text-gray-400 line-through font-mono">${p.base_price}</span>
             )}
           </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 import { 
   getHomeProducts, 
   createFullAdminProduct, 
@@ -35,7 +36,8 @@ import {
   CheckCircle2, AlertTriangle, Clock, Truck, Download, X, Layers,
   DollarSign, Key, Save, FileText, MapPin, User, Mail, ExternalLink, 
   TrendingUp, CreditCard, Package, ShieldCheck, Database, Sliders, Image as ImageIcon,
-  ArrowRight, Eye, Check, ChevronRight, Activity, Terminal, MinusCircle, Flame
+  ArrowRight, Eye, Check, ChevronRight, Activity, Terminal, MinusCircle, Flame,
+  Percent, Edit3
 } from 'lucide-react';
 
 const ACTIVITY_PRESETS = {
@@ -101,6 +103,10 @@ export default function CrownAdminControlTower() {
   // Global Search Overlay (Ctrl+K)
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [globalQuery, setGlobalQuery] = useState('');
+
+  // Modals & Details
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [editingProductModal, setEditingProductModal] = useState(null);
 
   // Products Filter & 8-Step Wizard State
   const [selectedDept, setSelectedDept] = useState('all');
@@ -326,6 +332,55 @@ export default function CrownAdminControlTower() {
     }
   };
 
+  const handleToggleSaleDiscount = async (product, enableSale, customDiscountPercent = 20) => {
+    try {
+      const calculatedSalePrice = enableSale
+        ? Math.round(Number(product.base_price) * (1 - customDiscountPercent / 100))
+        : null;
+
+      const { error } = await supabase
+        .from('products')
+        .update({
+          is_on_sale: enableSale,
+          sale_price: calculatedSalePrice
+        })
+        .eq('id', product.id);
+
+      if (error) throw error;
+      await refreshAll();
+    } catch (err) {
+      alert(`Sale toggle failed: ${err.message}`);
+    }
+  };
+
+  const handleSaveEditedProduct = async (e) => {
+    e.preventDefault();
+    if (!editingProductModal) return;
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({
+          name: editingProductModal.name,
+          base_price: parseFloat(editingProductModal.base_price),
+          sale_price: editingProductModal.sale_price ? parseFloat(editingProductModal.sale_price) : null,
+          is_on_sale: Boolean(editingProductModal.sale_price && Number(editingProductModal.sale_price) < Number(editingProductModal.base_price)),
+          department: editingProductModal.department,
+          primary_category: editingProductModal.primary_category,
+          subcategory: editingProductModal.subcategory,
+          description: editingProductModal.description,
+          short_description: editingProductModal.short_description
+        })
+        .eq('id', editingProductModal.id);
+
+      if (error) throw error;
+      alert('Product updated successfully!');
+      setEditingProductModal(null);
+      await refreshAll();
+    } catch (err) {
+      alert(`Update failed: ${err.message}`);
+    }
+  };
+
   const handleSavePaymentGateway = async (e) => {
     e.preventDefault();
     try {
@@ -373,6 +428,7 @@ export default function CrownAdminControlTower() {
   const outOfStockUnits = inventory.filter(v => (v.stock || 0) <= 0).length;
   const pendingOrdersCount = orders.filter(o => (o.status || 'processing') === 'processing').length;
   const pendingReturnsCount = returnsList.filter(r => r.status === 'requested').length;
+  const activeSalesCount = products.filter(p => p.is_on_sale || (p.sale_price && Number(p.sale_price) < Number(p.base_price))).length;
 
   // Real 7-Day Revenue Plotting
   const last7Days = Array.from({ length: 7 }).map((_, i) => {
@@ -408,7 +464,7 @@ export default function CrownAdminControlTower() {
     const q = globalQuery.toLowerCase();
     return {
       products: products.filter(p => p.name.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q)),
-      orders: orders.filter(o => o.order_number.toLowerCase().includes(q) || o.shipping_address?.name?.toLowerCase().includes(q)),
+      orders: orders.filter(o => (o.order_number || o.id).toLowerCase().includes(q) || o.shipping_address?.name?.toLowerCase().includes(q)),
       customers: customers.filter(c => c.full_name?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q)),
       returns: returnsList.filter(r => r.order_number?.toLowerCase().includes(q) || r.customer_name?.toLowerCase().includes(q)),
       reviews: reviewsList.filter(rv => rv.comment?.toLowerCase().includes(q) || rv.customer_name?.toLowerCase().includes(q)),
@@ -462,7 +518,7 @@ export default function CrownAdminControlTower() {
                       <div className="text-[10px] text-gray-400 font-bold uppercase mb-1">Orders ({globalResults.orders.length})</div>
                       {globalResults.orders.map(o => (
                         <div key={o.id} onClick={() => { setActiveTab('orders'); setIsSearchOpen(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg flex justify-between cursor-pointer mb-1">
-                          <span className="font-bold text-white">{o.order_number}</span>
+                          <span className="font-bold text-white">{o.order_number || o.id.slice(0, 8)}</span>
                           <span className="text-[#CCFF00]">${o.total_amount ?? o.total} • {o.status}</span>
                         </div>
                       ))}
@@ -538,6 +594,7 @@ export default function CrownAdminControlTower() {
               <div className="text-[9px] font-mono uppercase tracking-wider text-gray-500 px-3 mb-1 font-bold">STORE MASTER</div>
               {[
                 { id: 'products', label: 'Products & Wizard', icon: ShoppingBag, count: products.length },
+                { id: 'sales', label: 'Sales & Markdowns', icon: Percent, count: activeSalesCount },
                 { id: 'categories', label: 'Categories & Drops', icon: Layers },
                 { id: 'inventory', label: 'Inventory Engine', icon: Boxes, alert: lowStockUnits > 0 || outOfStockUnits > 0 },
                 { id: 'orders', label: 'Deliveries & Orders', icon: Truck, count: pendingOrdersCount },
@@ -675,6 +732,9 @@ export default function CrownAdminControlTower() {
                 <button onClick={() => { setActiveTab('add-product'); setWizardStep(1); }} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0">
                   <Plus className="w-3.5 h-3.5 text-[#CCFF00]" /> [ + ADD PRODUCT ]
                 </button>
+                <button onClick={() => setActiveTab('sales')} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0">
+                  <Percent className="w-3.5 h-3.5 text-red-400" /> [ CLEARANCE ENGINE ]
+                </button>
                 <button onClick={() => setActiveTab('orders')} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0">
                   <Truck className="w-3.5 h-3.5 text-blue-400" /> [ VIEW ORDERS ]
                 </button>
@@ -716,11 +776,11 @@ export default function CrownAdminControlTower() {
 
                 <div className="bg-[#141414] border border-white/10 rounded-2xl p-5">
                   <div className="flex justify-between items-center text-gray-400 mb-1">
-                    <span className="text-[10px] font-bold uppercase">PRODUCT VARIANTS</span>
-                    <Package className="w-4 h-4 text-purple-400" />
+                    <span className="text-[10px] font-bold uppercase">ACTIVE SALES / DROPS</span>
+                    <Percent className="w-4 h-4 text-red-400" />
                   </div>
-                  <div className="text-3xl font-black text-white">{inventory.length}</div>
-                  <div className="text-[10px] text-gray-500 mt-2">Across {products.length} master models</div>
+                  <div className="text-3xl font-black text-white">{activeSalesCount}</div>
+                  <div className="text-[10px] text-gray-500 mt-2">Discounted items live on storefront</div>
                 </div>
               </div>
 
@@ -783,7 +843,8 @@ export default function CrownAdminControlTower() {
                       <th className="p-4">Visual</th>
                       <th className="p-4">Name / SKU</th>
                       <th className="p-4">Department</th>
-                      <th className="p-4">Price</th>
+                      <th className="p-4">Base Price</th>
+                      <th className="p-4">Sale Price</th>
                       <th className="p-4">Stock</th>
                       <th className="p-4">Status</th>
                       <th className="p-4 text-right">Actions</th>
@@ -803,7 +864,14 @@ export default function CrownAdminControlTower() {
                             <div className="font-mono text-[10px] text-gray-500">{p.sku || 'SKU-NONE'}</div>
                           </td>
                           <td className="p-4 uppercase text-gray-400">{p.department} // {p.primary_category}</td>
-                          <td className="p-4 font-black text-[#CCFF00]">${p.sale_price || p.base_price}</td>
+                          <td className="p-4 font-bold text-white">${p.base_price}</td>
+                          <td className="p-4">
+                            {p.sale_price ? (
+                              <span className="text-red-400 font-bold">${p.sale_price}</span>
+                            ) : (
+                              <span className="text-gray-600">—</span>
+                            )}
+                          </td>
                           <td className="p-4">
                             <span className={totalStock <= 0 ? 'text-red-400 font-bold' : totalStock <= 5 ? 'text-yellow-400 font-bold' : 'text-white'}>
                               {totalStock} units
@@ -815,6 +883,9 @@ export default function CrownAdminControlTower() {
                             </span>
                           </td>
                           <td className="p-4 text-right space-x-2">
+                            <button onClick={() => setEditingProductModal(p)} className="p-1 text-gray-400 hover:text-white" title="Edit Article">
+                              <Edit3 className="w-4 h-4" />
+                            </button>
                             <button onClick={async () => { await duplicateProduct(p.id); refreshAll(); }} className="p-1 text-gray-400 hover:text-white" title="Duplicate">
                               <Copy className="w-4 h-4" />
                             </button>
@@ -831,7 +902,80 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 3. PRODUCT WIZARD */}
+          {/* 3. SALES & MARKDOWNS CONTROL ENGINE */}
+          {activeTab === 'sales' && (
+            <div className="space-y-6 font-mono text-xs">
+              <div className="bg-[#141414] p-6 rounded-2xl border border-white/10">
+                <h3 className="text-sm font-bold uppercase text-white mb-2">Clearance & Discount Controls</h3>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Toggle promotional markdowns on or off instantly. Applying a sale will update <span className="text-[#CCFF00]">sale_price</span>, render dynamic discount tags on product cards, and automatically surface items inside the customer-facing Sales tab.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {products.map(p => {
+                  const isOnSale = p.is_on_sale || (p.sale_price && Number(p.sale_price) < Number(p.base_price));
+                  const discountPct = isOnSale && p.sale_price ? Math.round(((p.base_price - p.sale_price) / p.base_price) * 100) : 20;
+
+                  return (
+                    <div key={p.id} className="bg-[#141414] p-5 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={p.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=200&q=80'}
+                          alt={p.name}
+                          className="w-14 h-14 object-contain bg-black/40 rounded-xl p-1 border border-white/10 shrink-0"
+                        />
+                        <div>
+                          <div className="font-bold text-white text-xs font-sans">{p.name}</div>
+                          <div className="text-[10px] text-gray-500 uppercase">{p.department} // {p.primary_category}</div>
+                          <div className="text-xs font-bold mt-1">
+                            Base: <span className="text-white">${p.base_price}</span>
+                            {isOnSale && (
+                              <span className="text-red-400 ml-2">Sale: ${p.sale_price} (-{discountPct}%)</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-white/5 flex gap-2">
+                        {isOnSale ? (
+                          <button
+                            onClick={() => handleToggleSaleDiscount(p, false)}
+                            className="w-full py-2.5 bg-red-600/20 border border-red-500 text-red-300 font-bold text-[10px] uppercase rounded-xl hover:bg-red-600 hover:text-white transition-colors"
+                          >
+                            Remove From Sale
+                          </button>
+                        ) : (
+                          <div className="flex gap-2 w-full">
+                            <button
+                              onClick={() => handleToggleSaleDiscount(p, true, 20)}
+                              className="flex-1 py-2 bg-white/5 border border-white/10 text-white font-bold text-[10px] uppercase rounded-xl hover:bg-[#CCFF00] hover:text-black transition-all"
+                            >
+                              +20% OFF
+                            </button>
+                            <button
+                              onClick={() => handleToggleSaleDiscount(p, true, 30)}
+                              className="flex-1 py-2 bg-white/5 border border-white/10 text-white font-bold text-[10px] uppercase rounded-xl hover:bg-[#CCFF00] hover:text-black transition-all"
+                            >
+                              +30% OFF
+                            </button>
+                            <button
+                              onClick={() => handleToggleSaleDiscount(p, true, 50)}
+                              className="flex-1 py-2 bg-white/5 border border-white/10 text-white font-bold text-[10px] uppercase rounded-xl hover:bg-[#CCFF00] hover:text-black transition-all"
+                            >
+                              +50% OFF
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 4. PRODUCT WIZARD */}
           {activeTab === 'add-product' && (
             <div className="max-w-4xl mx-auto bg-[#141414] border border-white/10 rounded-3xl p-8 space-y-6 font-mono text-xs">
               <div className="flex justify-between items-center border-b border-white/10 pb-4">
@@ -1033,7 +1177,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 4. CATEGORIES & COLLECTIONS */}
+          {/* 5. CATEGORIES & COLLECTIONS */}
           {activeTab === 'categories' && (
             <div className="space-y-6 font-mono text-xs">
               <div className="flex justify-between items-center">
@@ -1087,7 +1231,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 5. INVENTORY MATRIX (4-PILLAR) */}
+          {/* 6. INVENTORY MATRIX (4-PILLAR) */}
           {activeTab === 'inventory' && (
             <div className="space-y-6 font-mono text-xs">
               <div className="flex justify-between items-center">
@@ -1144,13 +1288,13 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 6. ORDERS & DELIVERIES */}
+          {/* 7. ORDERS & DELIVERIES */}
           {activeTab === 'orders' && (
             <div className="space-y-6 font-mono text-xs">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-base font-bold font-sans uppercase">Orders & Vehicle Logistics</h3>
-                  <p className="text-gray-500 text-[11px]">10-Stage status control, carrier tracking inputs, and printable invoices.</p>
+                  <p className="text-gray-500 text-[11px]">10-Stage status control, carrier tracking inputs, Stripe payment logs, and printable invoices.</p>
                 </div>
                 <button onClick={() => exportCSV(orders, 'orders-ledger')} className="px-3.5 py-1.5 bg-white/5 border border-white/10 rounded-lg font-bold flex items-center gap-1.5">
                   <Download className="w-3.5 h-3.5 text-[#CCFF00]" /> Export Orders CSV
@@ -1159,36 +1303,43 @@ export default function CrownAdminControlTower() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {orders.map(o => {
-                  const addr = o.shipping_address || {};
+                  const addr = o.shipping_address || o.customer || {};
                   return (
                     <div key={o.id} className="bg-[#141414] border border-white/10 rounded-3xl p-6 flex flex-col justify-between hover:border-white/30 transition-all shadow-xl">
                       <div className="space-y-4">
                         <div className="flex justify-between items-start">
                           <div>
                             <span className="text-[9px] text-gray-500 uppercase font-bold">ORDER CODE</span>
-                            <div className="text-sm font-black text-white">{o.order_number}</div>
+                            <div className="text-sm font-black text-white">{o.order_number || o.id.slice(0, 8)}</div>
                           </div>
-                          <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-[9px] uppercase font-bold text-[#CCFF00]">
-                            {o.status || 'processing'}
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-[9px] uppercase font-bold text-[#CCFF00]">
+                              {o.status || 'processing'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase font-bold ${
+                              o.payment_status === 'paid' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}>
+                              {o.payment_status || 'unpaid'}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="p-3.5 bg-black/50 border border-white/5 rounded-2xl space-y-1.5 text-[11px]">
                           <div className="font-bold text-white flex items-center gap-1.5">
-                            <User className="w-3.5 h-3.5 text-gray-500" /> {addr.name || 'Athlete'}
+                            <User className="w-3.5 h-3.5 text-gray-500" /> {addr.recipient_name || addr.name || 'Athlete'}
                           </div>
                           <div className="text-gray-400 flex items-center gap-1.5 truncate">
                             <Mail className="w-3.5 h-3.5 text-gray-500" /> {addr.email || o.guest_email || 'No email'}
                           </div>
                           <div className="text-gray-400 flex items-start gap-1.5 pt-1">
                             <MapPin className="w-3.5 h-3.5 text-[#CCFF00] shrink-0 mt-0.5" />
-                            <div>{addr.address || 'Standard Delivery'}, {addr.city} {addr.postalCode && `• ${addr.postalCode}`}</div>
+                            <div>{addr.street || addr.address || 'Standard Delivery'}, {addr.city} {addr.postal_code && `• ${addr.postal_code}`}</div>
                           </div>
                         </div>
 
                         <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
                           <span className="text-gray-400 text-[10px] uppercase">Paid Amount</span>
-                          <span className="text-base font-black text-[#CCFF00]">${Number(o.total_amount ?? o.total).toFixed(2)}</span>
+                          <span className="text-base font-black text-[#CCFF00]">${Number(o.total_amount ?? o.total ?? 0).toFixed(2)}</span>
                         </div>
                       </div>
 
@@ -1210,14 +1361,22 @@ export default function CrownAdminControlTower() {
                           <option value="refunded">10. Refunded</option>
                         </select>
 
-                        <a
-                          href={`/order-detail?number=${o.order_number}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-center font-bold uppercase text-white flex items-center justify-center gap-1.5 transition-all"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-[#CCFF00]" /> Print Invoice
-                        </a>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => setSelectedOrderDetails(o)}
+                            className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-center font-bold uppercase text-white flex items-center justify-center gap-1.5 transition-all"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-[#CCFF00]" /> Audit
+                          </button>
+                          <a
+                            href={`/order-detail?number=${o.order_number || o.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-center font-bold uppercase text-white flex items-center justify-center gap-1.5 transition-all"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-gray-400" /> Invoice
+                          </a>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1226,7 +1385,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 7. RETURNS & REFUNDS */}
+          {/* 8. RETURNS & REFUNDS */}
           {activeTab === 'returns' && (
             <div className="space-y-6 font-mono text-xs">
               <div className="flex justify-between items-center">
@@ -1276,7 +1435,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 8. CUSTOMERS PASSPORTS */}
+          {/* 9. CUSTOMERS PASSPORTS */}
           {activeTab === 'customers' && (
             <div className="bg-[#141414] border border-white/10 rounded-2xl overflow-hidden font-mono text-xs">
               <table className="w-full text-left">
@@ -1293,8 +1452,8 @@ export default function CrownAdminControlTower() {
                     <tr key={c.id} className="hover:bg-white/5">
                       <td className="p-4 font-bold text-white font-sans">{c.full_name || 'Athlete'}</td>
                       <td className="p-4 text-gray-400">{c.email}</td>
-                      <td className="p-4 font-bold text-white">{c.ordersCount} Orders</td>
-                      <td className="p-4 font-black text-[#CCFF00]">${c.totalSpent.toFixed(2)}</td>
+                      <td className="p-4 font-bold text-white">{c.ordersCount || 0} Orders</td>
+                      <td className="p-4 font-black text-[#CCFF00]">${(c.totalSpent || 0).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1302,7 +1461,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 9. REVIEWS MODERATION */}
+          {/* 10. REVIEWS MODERATION */}
           {activeTab === 'reviews' && (
             <div className="space-y-4 font-mono text-xs">
               {reviewsList.map(rev => (
@@ -1328,7 +1487,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 10. STOREFRONT CMS */}
+          {/* 11. STOREFRONT CMS */}
           {activeTab === 'content' && (
             <div className="max-w-3xl bg-[#141414] border border-white/10 rounded-3xl p-8 space-y-6 font-mono text-xs">
               <h3 className="font-bold text-sm font-sans uppercase">Storefront Visual Customizer</h3>
@@ -1357,7 +1516,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 11. MEDIA LIBRARY */}
+          {/* 12. MEDIA LIBRARY */}
           {activeTab === 'media' && (
             <div className="space-y-6 font-mono text-xs">
               <div className="flex justify-between items-center">
@@ -1378,7 +1537,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 12. COUPONS & PROMOS */}
+          {/* 13. COUPONS & PROMOS */}
           {activeTab === 'coupons' && (
             <div className="space-y-6 font-mono text-xs">
               <div className="p-6 bg-[#141414] border border-white/10 rounded-2xl space-y-4">
@@ -1425,7 +1584,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 13. SHIPPING RULES */}
+          {/* 14. SHIPPING RULES */}
           {activeTab === 'shipping' && (
             <div className="max-w-2xl bg-[#141414] border border-white/10 rounded-3xl p-8 space-y-6 font-mono text-xs">
               <h3 className="font-bold text-sm font-sans uppercase">Shipping Rules & Free Delivery Tier</h3>
@@ -1443,7 +1602,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 14. PAYMENT GATEWAY */}
+          {/* 15. PAYMENT GATEWAY */}
           {activeTab === 'gateway' && (
             <div className="max-w-3xl bg-[#141414] border border-white/10 rounded-3xl p-8 space-y-6 font-mono text-xs">
               <div className="flex items-center gap-3 border-b border-white/10 pb-4">
@@ -1492,7 +1651,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 15. ANALYTICS & FUNNEL */}
+          {/* 16. ANALYTICS & FUNNEL */}
           {activeTab === 'analytics' && (
             <div className="space-y-8 font-mono text-xs">
               <div className="bg-[#141414] border border-white/10 rounded-2xl p-6">
@@ -1566,7 +1725,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 16. CSV REPORTS */}
+          {/* 17. CSV REPORTS */}
           {activeTab === 'reports' && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 font-mono text-xs">
               <div className="p-6 bg-[#141414] border border-white/10 rounded-2xl space-y-3">
@@ -1590,7 +1749,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 17. NOTIFICATIONS */}
+          {/* 18. NOTIFICATIONS */}
           {activeTab === 'notifications' && (
             <div className="max-w-2xl bg-[#141414] border border-white/10 rounded-2xl p-6 space-y-4 font-mono text-xs">
               <h3 className="font-bold uppercase text-gray-400 mb-2 font-sans">Live Notification Log</h3>
@@ -1603,7 +1762,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* 18. SETTINGS */}
+          {/* 19. SETTINGS */}
           {activeTab === 'settings' && (
             <div className="max-w-3xl bg-[#141414] border border-white/10 rounded-3xl p-8 space-y-6 font-mono text-xs">
               <h3 className="font-bold text-sm font-sans uppercase">Website Configuration</h3>
@@ -1621,7 +1780,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* SECURITY */}
+          {/* 20. SECURITY */}
           {activeTab === 'security' && (
             <div className="max-w-2xl bg-[#141414] border border-white/10 rounded-3xl p-8 space-y-4 font-mono text-xs">
               <h3 className="font-bold text-sm font-sans uppercase flex items-center gap-2">
@@ -1635,7 +1794,7 @@ export default function CrownAdminControlTower() {
             </div>
           )}
 
-          {/* SYSTEM HEALTH */}
+          {/* 21. SYSTEM HEALTH */}
           {activeTab === 'system' && (
             <div className="max-w-2xl bg-[#141414] border border-white/10 rounded-3xl p-8 space-y-4 font-mono text-xs">
               <h3 className="font-bold text-sm font-sans uppercase flex items-center gap-2">
@@ -1664,6 +1823,144 @@ export default function CrownAdminControlTower() {
 
         </div>
       </main>
+
+      {/* ─────────────────────────────────────────────────────────── */}
+      {/* ORDER AUDIT MODAL                                           */}
+      {/* ─────────────────────────────────────────────────────────── */}
+      {selectedOrderDetails && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-md">
+          <div className="bg-[#141414] max-w-lg w-full rounded-3xl border border-white/10 p-8 shadow-2xl relative font-mono text-xs">
+            <div className="flex justify-between items-center border-b border-white/10 pb-4 mb-4">
+              <span className="font-bold text-white uppercase">ORDER AUDIT: {selectedOrderDetails.order_number || selectedOrderDetails.id.slice(0, 8)}</span>
+              <button onClick={() => setSelectedOrderDetails(null)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-3 bg-black/60 rounded-xl border border-white/5 space-y-1">
+                <div className="text-gray-500 text-[10px] uppercase font-bold">Athlete Shipping Address</div>
+                <div className="font-bold text-white">{selectedOrderDetails.customer?.recipient_name || selectedOrderDetails.shipping_address?.name || 'Customer'}</div>
+                <div className="text-gray-400">{selectedOrderDetails.customer?.email || selectedOrderDetails.shipping_address?.email}</div>
+                <div className="text-gray-400">{selectedOrderDetails.customer?.street || selectedOrderDetails.shipping_address?.address}, {selectedOrderDetails.customer?.city || selectedOrderDetails.shipping_address?.city}</div>
+              </div>
+
+              <div className="p-3 bg-black/60 rounded-xl border border-white/5 space-y-2">
+                <div className="text-gray-500 text-[10px] uppercase font-bold">Purchased Loadouts</div>
+                {(selectedOrderDetails.items || selectedOrderDetails.order_items || []).map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-xs text-white">
+                    <span>{item.product_variants?.products?.name || item.product_name || 'Equipment Gear'} (x{item.quantity || 1})</span>
+                    <span>${item.product_variants?.products?.sale_price || item.unit_price || 165}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                <span className="text-gray-400 text-[10px] uppercase">Stripe Payment Status</span>
+                <span className={`px-2.5 py-0.5 rounded text-[10px] uppercase font-bold ${
+                  selectedOrderDetails.payment_status === 'paid' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                }`}>
+                  {selectedOrderDetails.payment_status || 'unpaid'}
+                </span>
+              </div>
+
+              <div className="flex justify-between text-sm font-bold border-t border-white/10 pt-3 text-white">
+                <span>Total Amount</span>
+                <span className="text-[#CCFF00]">${Number(selectedOrderDetails.total_amount ?? selectedOrderDetails.total ?? 0).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────── */}
+      {/* QUICK PRODUCT EDIT MODAL                                    */}
+      {/* ─────────────────────────────────────────────────────────── */}
+      {editingProductModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-md">
+          <div className="bg-[#141414] max-w-lg w-full rounded-3xl border border-white/10 p-8 shadow-2xl relative font-mono text-xs">
+            <div className="flex justify-between items-center border-b border-white/10 pb-4 mb-4">
+              <span className="font-bold text-[#CCFF00] uppercase">EDIT ARTICLE: {editingProductModal.name}</span>
+              <button onClick={() => setEditingProductModal(null)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedProduct} className="space-y-4">
+              <div>
+                <label className="text-gray-400 block mb-1 uppercase text-[10px]">Article Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editingProductModal.name}
+                  onChange={(e) => setEditingProductModal({ ...editingProductModal, name: e.target.value })}
+                  className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-gray-400 block mb-1 uppercase text-[10px]">Base Price ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editingProductModal.base_price}
+                    onChange={(e) => setEditingProductModal({ ...editingProductModal, base_price: e.target.value })}
+                    className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 block mb-1 uppercase text-[10px]">Sale Price ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingProductModal.sale_price || ''}
+                    onChange={(e) => setEditingProductModal({ ...editingProductModal, sale_price: e.target.value })}
+                    className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-gray-400 block mb-1 uppercase text-[10px]">Department</label>
+                  <select
+                    value={editingProductModal.department}
+                    onChange={(e) => setEditingProductModal({ ...editingProductModal, department: e.target.value })}
+                    className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none"
+                  >
+                    <option value="men">Men</option>
+                    <option value="women">Women</option>
+                    <option value="kids">Kids</option>
+                    <option value="sports">Sports</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-gray-400 block mb-1 uppercase text-[10px]">Category</label>
+                  <select
+                    value={editingProductModal.primary_category}
+                    onChange={(e) => setEditingProductModal({ ...editingProductModal, primary_category: e.target.value })}
+                    className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none"
+                  >
+                    <option value="shoes">Shoes</option>
+                    <option value="clothing">Clothes</option>
+                    <option value="accessories">Accessories</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 bg-[#CCFF00] hover:bg-[#b8e600] text-black font-black uppercase tracking-wider rounded-xl transition-colors mt-2"
+              >
+                Save Article Changes
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
