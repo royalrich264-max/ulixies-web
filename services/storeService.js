@@ -186,6 +186,93 @@ export function toggleWishlistProduct(product) {
   }
 }
 
+// Logged-in users get a real, cross-device wishlist backed by the
+// database; guests keep using localStorage. NOTE: a guest's saved items
+// do not automatically transfer once they log in.
+async function getOrCreateUserWishlist(userId) {
+  const { data: existing } = await supabase
+    .from('wishlists')
+    .select('id')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) return existing.id;
+
+  const { data: created, error } = await supabase
+    .from('wishlists')
+    .insert({ user_id: userId })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return created.id;
+}
+
+export async function getWishlist() {
+  const user = await getCurrentUser();
+  if (!user) return getLocalWishlist();
+
+  const wishlistId = await getOrCreateUserWishlist(user.id);
+  const { data, error } = await supabase
+    .from('wishlist_items')
+    .select(`
+      id,
+      added_at,
+      products (
+        id, name, slug, department, primary_category, base_price, sale_price,
+        product_images ( url )
+      )
+    `)
+    .eq('wishlist_id', wishlistId)
+    .order('added_at', { ascending: false });
+
+  if (error) {
+    console.error('getWishlist error:', error);
+    return [];
+  }
+
+  return (data || [])
+    .filter((item) => item.products)
+    .map((item) => ({
+      id: item.products.id,
+      name: item.products.name,
+      slug: item.products.slug,
+      department: item.products.department,
+      primary_category: item.products.primary_category,
+      base_price: item.products.base_price,
+      sale_price: item.products.sale_price,
+      image_url: item.products.product_images?.[0]?.url || ''
+    }));
+}
+
+export async function toggleWishlistItem(product) {
+  if (!product) return [];
+  const user = await getCurrentUser();
+  if (!user) return toggleWishlistProduct(product);
+
+  const wishlistId = await getOrCreateUserWishlist(user.id);
+
+  const { data: existing } = await supabase
+    .from('wishlist_items')
+    .select('id')
+    .eq('wishlist_id', wishlistId)
+    .eq('product_id', product.id)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from('wishlist_items').delete().eq('id', existing.id);
+  } else {
+    await supabase.from('wishlist_items').insert({ wishlist_id: wishlistId, product_id: product.id });
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('wishlist-updated'));
+  }
+
+  return getWishlist();
+}
+
 // ================= USER PROFILE & ADDRESSES =================
 export async function getUserProfile() {
   const user = await getCurrentUser();
@@ -603,7 +690,18 @@ export async function getAllReviews() {
     .order('created_at', { ascending: false });
 
   if (error) return [];
-  return data || [];
+  const reviews = data || [];
+
+  const userIds = [...new Set(reviews.map((r) => r.user_id).filter(Boolean))];
+  if (userIds.length === 0) return reviews;
+
+  const { data: profilesData } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', userIds);
+
+  const nameById = new Map((profilesData || []).map((p) => [p.id, p.full_name]));
+  return reviews.map((r) => ({ ...r, reviewer_name: nameById.get(r.user_id) || 'Verified Athlete' }));
 }
 
 export async function toggleReviewPublish(reviewId, is_published) {
@@ -628,7 +726,7 @@ export async function getAllCoupons() {
   const { data, error } = await supabase
     .from('coupons')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('code', { ascending: true });
 
   if (error) return [];
   return data || [];
@@ -641,12 +739,24 @@ export async function createCoupon(couponData) {
       code: couponData.code.toUpperCase().trim(),
       discount_type: couponData.discount_type,
       discount_value: Number(couponData.discount_value),
-      min_order_amount: Number(couponData.min_order_amount) || 0,
-      max_uses: Number(couponData.max_uses) || 500,
-      start_date: couponData.start_date || new Date().toISOString(),
-      end_date: couponData.end_date || null,
+      usage_limit: Number(couponData.usage_limit) || 500,
+      per_user_limit: Number(couponData.per_user_limit) || 1,
+      starts_at: couponData.starts_at || new Date().toISOString(),
+      expires_at: couponData.expires_at || null,
       is_active: true,
     })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function toggleCouponActive(couponId, is_active) {
+  const { data, error } = await supabase
+    .from('coupons')
+    .update({ is_active })
+    .eq('id', couponId)
     .select()
     .single();
 
@@ -657,6 +767,75 @@ export async function createCoupon(couponData) {
 export async function deleteCoupon(couponId) {
   const { error } = await supabase.from('coupons').delete().eq('id', couponId);
   if (error) throw error;
+}
+
+export async function getCouponUsageCounts() {
+  const { data, error } = await supabase.from('coupon_usage').select('coupon_id');
+  if (error) return {};
+  const counts = {};
+  (data || []).forEach((row) => {
+    counts[row.coupon_id] = (counts[row.coupon_id] || 0) + 1;
+  });
+  return counts;
+}
+
+export async function validateCoupon(code, subtotal) {
+  const normalizedCode = (code || '').toUpperCase().trim();
+  if (!normalizedCode) return { valid: false, message: 'Enter a coupon code.' };
+
+  const { data: coupon, error } = await supabase
+    .from('coupons')
+    .select('*')
+    .eq('code', normalizedCode)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (error || !coupon) return { valid: false, message: 'Invalid or inactive coupon code.' };
+
+  const now = new Date();
+  if (coupon.starts_at && new Date(coupon.starts_at) > now) {
+    return { valid: false, message: 'This coupon is not active yet.' };
+  }
+  if (coupon.expires_at && new Date(coupon.expires_at) < now) {
+    return { valid: false, message: 'This coupon has expired.' };
+  }
+
+  if (coupon.usage_limit) {
+    const { count } = await supabase
+      .from('coupon_usage')
+      .select('id', { count: 'exact', head: true })
+      .eq('coupon_id', coupon.id);
+    if ((count || 0) >= coupon.usage_limit) {
+      return { valid: false, message: 'This coupon has reached its usage limit.' };
+    }
+  }
+
+  const user = await getCurrentUser();
+  if (user && coupon.per_user_limit) {
+    const { count: userCount } = await supabase
+      .from('coupon_usage')
+      .select('id', { count: 'exact', head: true })
+      .eq('coupon_id', coupon.id)
+      .eq('user_id', user.id);
+    if ((userCount || 0) >= coupon.per_user_limit) {
+      return { valid: false, message: 'You have already used this coupon the maximum number of times.' };
+    }
+  }
+
+  const discountAmount = coupon.discount_type === 'percentage'
+    ? Number((Number(subtotal) * (Number(coupon.discount_value) / 100)).toFixed(2))
+    : Math.min(Number(coupon.discount_value), Number(subtotal));
+
+  return { valid: true, coupon, discountAmount };
+}
+
+export async function recordCouponUsage(couponId, orderId) {
+  const user = await getCurrentUser();
+  const { error } = await supabase
+    .from('coupon_usage')
+    .insert({ coupon_id: couponId, order_id: orderId, user_id: user?.id || null });
+
+  if (error) console.error('recordCouponUsage error:', error);
 }
 
 // ================= STORE CONTENT =================
@@ -703,6 +882,99 @@ export async function updateStoreSettings(key, value) {
 
   if (error) throw error;
   return data;
+}
+
+// ================= CUSTOMER SUPPORT =================
+export async function submitSupportTicket({ name, email, subject, message }) {
+  const user = await getCurrentUser();
+  const { data, error } = await supabase
+    .from('support_tickets')
+    .insert({
+      user_id: user?.id || null,
+      name,
+      email,
+      subject,
+      message,
+      status: 'open',
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message || 'Failed to submit your message.');
+  return data;
+}
+
+export async function getAllSupportTickets() {
+  const { data, error } = await supabase
+    .from('support_tickets')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+  return data || [];
+}
+
+export async function updateSupportTicket(ticketId, { status, admin_response }) {
+  const payload = { updated_at: new Date().toISOString() };
+  if (status !== undefined) payload.status = status;
+  if (admin_response !== undefined) payload.admin_response = admin_response;
+
+  const { data, error } = await supabase
+    .from('support_tickets')
+    .update(payload)
+    .eq('id', ticketId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ================= AUDIT LOG & ADMIN NOTIFICATIONS =================
+export async function getAuditLog() {
+  const { data, error } = await supabase
+    .from('audit_log')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) {
+    console.error('getAuditLog error:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function getAdminNotifications() {
+  const { data, error } = await supabase
+    .from('admin_notifications')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error('getAdminNotifications error:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function markNotificationRead(notificationId) {
+  const { error } = await supabase
+    .from('admin_notifications')
+    .update({ is_read: true })
+    .eq('id', notificationId);
+
+  if (error) throw error;
+}
+
+export async function markAllNotificationsRead() {
+  const { error } = await supabase
+    .from('admin_notifications')
+    .update({ is_read: true })
+    .eq('is_read', false);
+
+  if (error) throw error;
 }
 
 // ================= CART SYSTEM =================
@@ -834,7 +1106,7 @@ export async function clearCart(cartId) {
 }
 
 // ================= ORDERS =================
-export async function createOrder({ customer, items, total, subtotal, shippingCost, shippingSpeed }) {
+export async function createOrder({ customer, items, total, subtotal, shippingCost, shippingSpeed, discountAmount = 0 }) {
   const user = await getCurrentUser();
   const orderNumber = 'ULX-' + Math.floor(100000 + Math.random() * 900000);
   const parsedTotal = Number(total);
@@ -848,6 +1120,7 @@ export async function createOrder({ customer, items, total, subtotal, shippingCo
       total: parsedTotal,
       total_amount: parsedTotal,
       subtotal: Number(subtotal),
+      discount_amount: Number(discountAmount) || 0,
       shipping_cost: Number(shippingCost),
       shipping_speed: shippingSpeed,
       shipping_address: customer,
@@ -868,14 +1141,15 @@ export async function createOrder({ customer, items, total, subtotal, shippingCo
         order_id: order.id,
         variant_id: v?.id || null,
         product_name: p?.name || 'Footwear / Gear',
-        variant_size: `${v?.color ? v.color + ' / ' : ''}${v?.size || 'OS'}`,
+        size: v?.size || 'OS',
+        color: v?.color || null,
         unit_price: Number(unitPrice),
-        quantity: item.quantity,
-        image_url: p?.product_images?.[0]?.url || ''
+        quantity: item.quantity
       };
     });
 
-    await supabase.from('order_items').insert(orderLineItems);
+    const { error: itemsErr } = await supabase.from('order_items').insert(orderLineItems);
+    if (itemsErr) throw new Error(itemsErr.message);
   }
 
   const cartId = getLocalCartId();
@@ -884,12 +1158,22 @@ export async function createOrder({ customer, items, total, subtotal, shippingCo
   return order;
 }
 
+const ORDER_ITEMS_WITH_IMAGE = `
+  *,
+  product_variants (
+    id,
+    size,
+    color,
+    products ( product_images ( url ) )
+  )
+`;
+
 export async function getUserOrders() {
   const user = await getCurrentUser();
-  
+
   let query = supabase
     .from('orders')
-    .select(`*, order_items (*)`)
+    .select(`*, order_items ( ${ORDER_ITEMS_WITH_IMAGE} )`)
     .order('created_at', { ascending: false });
 
   if (user?.id) {
@@ -910,7 +1194,7 @@ export async function getUserOrders() {
 export async function getOrderDetails(orderNumber) {
   const { data, error } = await supabase
     .from('orders')
-    .select(`*, order_items (*)`)
+    .select(`*, order_items ( ${ORDER_ITEMS_WITH_IMAGE} )`)
     .eq('order_number', orderNumber)
     .single();
 

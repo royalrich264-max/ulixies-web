@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { getHomeProducts, toggleWishlistProduct, getLocalWishlist } from '@/services/storeService';
+import { getHomeProducts, toggleWishlistItem, getWishlist } from '@/services/storeService';
 import { Search, Heart, X, Footprints, Shirt, Briefcase, Layers } from 'lucide-react';
 
 function SearchContent() {
@@ -20,7 +20,8 @@ function SearchContent() {
     async function fetchCatalog() {
       const data = await getHomeProducts();
       setProducts(data || []);
-      setWishlistIds(getLocalWishlist().map((s) => s.id));
+      const saved = await getWishlist();
+      setWishlistIds(saved.map((s) => s.id));
     }
     fetchCatalog();
   }, []);
@@ -31,10 +32,10 @@ function SearchContent() {
     }
   }, [searchParams]);
 
-  const handleToggleHeart = (e, product) => {
+  const handleToggleHeart = async (e, product) => {
     e.preventDefault();
     e.stopPropagation();
-    const updated = toggleWishlistProduct(product);
+    const updated = await toggleWishlistItem(product);
     setWishlistIds(updated.map((u) => u.id));
   };
 

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { signInUser, signUpUser, getCurrentUser, signOutUser } from '@/services/storeService';
+import { isAdminUser } from '@/lib/adminConfig';
 import { ShieldCheck, LogOut } from 'lucide-react';
 
 export default function LoginPage() {
@@ -28,8 +29,8 @@ export default function LoginPage() {
         setMessage('Account created successfully! Check your email to confirm, or sign in now.');
         setIsSignUp(false);
       } else {
-        await signInUser(email, password);
-        router.push('/orders');
+        const { user } = await signInUser(email, password);
+        router.push(isAdminUser(user) ? '/admin' : '/orders');
       }
     } catch (err) {
       setMessage(err.message || 'Authentication failed');
@@ -52,9 +53,17 @@ export default function LoginPage() {
         </div>
         <h1 className="text-2xl font-black uppercase">Athlete Active</h1>
         <p className="text-xs font-mono text-gray-500 mt-1">{currentUser.email}</p>
+        {isAdminUser(currentUser) && (
+          <button
+            onClick={() => router.push('/admin')}
+            className="mt-8 px-6 py-3 bg-[#CCFF00] text-black rounded-full text-xs font-bold uppercase flex items-center justify-center gap-2 mx-auto hover:bg-[#b8e600]"
+          >
+            <ShieldCheck className="w-4 h-4" /> Enter Admin Tower
+          </button>
+        )}
         <button
           onClick={handleSignOut}
-          className="mt-8 px-6 py-3 bg-[#111111] text-white rounded-full text-xs font-bold uppercase flex items-center justify-center gap-2 mx-auto hover:bg-gray-800"
+          className="mt-4 px-6 py-3 bg-[#111111] text-white rounded-full text-xs font-bold uppercase flex items-center justify-center gap-2 mx-auto hover:bg-gray-800"
         >
           <LogOut className="w-4 h-4" /> Sign Out
         </button>

@@ -127,7 +127,7 @@ function InvoiceContent() {
               {(order.order_items || []).map((item) => (
                 <tr key={item.id} className="py-3">
                   <td className="py-3 font-bold text-black">{item.product_name}</td>
-                  <td className="py-3 font-mono text-gray-500">{item.variant_size || 'OS'}</td>
+                  <td className="py-3 font-mono text-gray-500">{item.color ? `${item.color} / ${item.size || 'OS'}` : (item.size || 'OS')}</td>
                   <td className="py-3 text-center font-mono">{item.quantity}</td>
                   <td className="py-3 text-right font-mono">${Number(item.unit_price).toFixed(2)}</td>
                   <td className="py-3 text-right font-mono font-bold">${(Number(item.unit_price) * item.quantity).toFixed(2)}</td>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getLocalWishlist, toggleWishlistProduct, getCart, addToCart } from '@/services/storeService';
+import { getWishlist, toggleWishlistItem, getCart, addToCart } from '@/services/storeService';
 import { Heart, Trash2, ShoppingBag, ExternalLink } from 'lucide-react';
 
 export default function WishlistPage() {
@@ -10,11 +10,11 @@ export default function WishlistPage() {
   const [loadingAdd, setLoadingAdd] = useState({});
 
   useEffect(() => {
-    setItems(getLocalWishlist());
+    getWishlist().then(setItems);
   }, []);
 
-  const handleRemove = (product) => {
-    const updated = toggleWishlistProduct(product);
+  const handleRemove = async (product) => {
+    const updated = await toggleWishlistItem(product);
     setItems(updated);
   };
 

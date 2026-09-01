@@ -3,8 +3,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
-import { getCart, createOrder, getCurrentUser } from '@/services/storeService';
-import { Lock, CreditCard, ShieldCheck } from 'lucide-react';
+import { getCart, createOrder, getCurrentUser, getStoreSettings, validateCoupon, recordCouponUsage } from '@/services/storeService';
+import { Lock, CreditCard, ShieldCheck, Tag, X, Check } from 'lucide-react';
 
 const SUPABASE_INTENT_URL =
   'https://zofzrpigxontxfoedazx.supabase.co/functions/v1/create-unified-payment-intent-index-ts';
@@ -31,6 +31,12 @@ export default function CheckoutPage() {
     shippingSpeed: 'standard',
   });
 
+  const [shippingRules, setShippingRules] = useState({ standard_rate: 0, express_rate: 15, free_threshold: 100 });
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponMessage, setCouponMessage] = useState('');
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
   const itemsList = cart?.items || [];
   const subtotal = itemsList.reduce((acc, item) => {
     const price =
@@ -42,8 +48,34 @@ export default function CheckoutPage() {
   }, 0);
 
   const displaySubtotal = subtotal > 0 ? subtotal : 165.0;
-  const shippingCost = form.shippingSpeed === 'express' ? 15 : 0;
-  const finalTotal = displaySubtotal + shippingCost;
+  const shippingCost = form.shippingSpeed === 'express'
+    ? Number(shippingRules.express_rate) || 0
+    : (displaySubtotal >= Number(shippingRules.free_threshold || 0) ? 0 : Number(shippingRules.standard_rate) || 0);
+  const discountAmount = appliedCoupon?.discountAmount || 0;
+  const finalTotal = Math.max(0, displaySubtotal + shippingCost - discountAmount);
+
+  const handleApplyCoupon = async () => {
+    setValidatingCoupon(true);
+    setCouponMessage('');
+    try {
+      const result = await validateCoupon(couponCode, displaySubtotal);
+      if (result.valid) {
+        setAppliedCoupon(result);
+        setCouponMessage(`"${result.coupon.code}" applied — $${result.discountAmount.toFixed(2)} off.`);
+      } else {
+        setAppliedCoupon(null);
+        setCouponMessage(result.message);
+      }
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    setCouponMessage('');
+  };
 
   // 1. Initial Load: Load Cart & Fetch Dynamic Stripe Session from Supabase Secrets
   useEffect(() => {
@@ -51,6 +83,10 @@ export default function CheckoutPage() {
       try {
         const data = await getCart();
         setCart(data || { items: [] });
+
+        const savedShippingRules = await getStoreSettings('shipping_rules');
+        if (savedShippingRules) setShippingRules((prev) => ({ ...prev, ...savedShippingRules }));
+
         const user = await getCurrentUser();
         if (user) {
           setForm((prev) => ({
@@ -149,7 +185,7 @@ export default function CheckoutPage() {
   const handleOrderSuccess = async (orderNum, method) => {
     setSubmitting(true);
     try {
-      await createOrder({
+      const order = await createOrder({
         order_number: orderNum,
         customer: {
           recipient_name: form.name,
@@ -162,8 +198,14 @@ export default function CheckoutPage() {
         total: finalTotal,
         subtotal: displaySubtotal,
         shippingCost: shippingCost,
-        shippingSpeed: form.shippingSpeed === 'express' ? 'Express Delivery' : 'Standard Delivery'
+        shippingSpeed: form.shippingSpeed === 'express' ? 'Express Delivery' : 'Standard Delivery',
+        discountAmount
       });
+
+      if (appliedCoupon?.coupon?.id && order?.id) {
+        await recordCouponUsage(appliedCoupon.coupon.id, order.id);
+      }
+
       router.push('/orders');
     } catch (err) {
       alert(`Order saving failed: ${err.message}`);
@@ -370,18 +412,61 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          <div className="border-t border-[#E5E5E5] pt-4 space-y-2 text-xs">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Subtotal</span>
-              <span className="font-mono font-bold">${displaySubtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Shipping</span>
-              <span className="font-mono font-bold">{shippingCost === 0 ? 'Free' : `$${shippingCost.toFixed(2)}`}</span>
-            </div>
-            <div className="flex justify-between text-sm font-bold pt-2 border-t border-[#E5E5E5]">
-              <span>Total</span>
-              <span className="font-mono">${finalTotal.toFixed(2)}</span>
+          <div className="border-t border-[#E5E5E5] pt-4">
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl mb-3">
+                <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" /> {appliedCoupon.coupon.code} applied
+                </span>
+                <button type="button" onClick={handleRemoveCoupon} className="text-emerald-700 hover:text-red-600">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2 mb-3">
+                <div className="relative flex-1">
+                  <Tag className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Coupon code"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 bg-white border border-[#E5E5E5] rounded-xl text-xs font-bold uppercase outline-none focus:border-black"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  disabled={validatingCoupon || !couponCode.trim()}
+                  className="px-4 py-2 bg-black text-white text-xs font-bold uppercase rounded-xl hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {validatingCoupon ? '...' : 'Apply'}
+                </button>
+              </div>
+            )}
+            {couponMessage && (
+              <p className={`text-[11px] font-mono mb-3 ${appliedCoupon ? 'text-emerald-700' : 'text-red-600'}`}>{couponMessage}</p>
+            )}
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Subtotal</span>
+                <span className="font-mono font-bold">${displaySubtotal.toFixed(2)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Discount</span>
+                  <span className="font-mono font-bold">-${discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-gray-500">Shipping</span>
+                <span className="font-mono font-bold">{shippingCost === 0 ? 'Free' : `$${shippingCost.toFixed(2)}`}</span>
+              </div>
+              <div className="flex justify-between text-sm font-bold pt-2 border-t border-[#E5E5E5]">
+                <span>Total</span>
+                <span className="font-mono">${finalTotal.toFixed(2)}</span>
+              </div>
             </div>
           </div>
         </div>

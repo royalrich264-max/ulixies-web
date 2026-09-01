@@ -28,6 +28,18 @@ const RETURN_REASONS = [
   'Other'
 ];
 
+function getItemImage(item) {
+  return item?.product_variants?.products?.product_images?.[0]?.url
+    || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=150&q=80';
+}
+
+function getItemVariantLabel(item) {
+  if (!item) return 'OS';
+  const color = item.color || item.product_variants?.color;
+  const size = item.size || item.product_variants?.size || 'OS';
+  return color ? `${color} / ${size}` : size;
+}
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -99,7 +111,7 @@ export default function OrdersPage() {
           customer_name: activeOrder.shipping_address?.recipient_name || user?.email || 'Customer',
           customer_email: user?.email || activeOrder.guest_email || 'customer@athlete.com',
           product_name: firstItem.product_name || 'Athletic Gear',
-          variant_size: firstItem.variant_size || 'OS',
+          variant_size: getItemVariantLabel(firstItem),
           quantity: firstItem.quantity || 1,
           refund_amount: activeOrder.total_amount ?? activeOrder.total ?? 0,
           reason: selectedReason,
@@ -172,16 +184,16 @@ export default function OrdersPage() {
 
                   <div className="flex items-center gap-3 p-2 bg-[#F9F9F9] rounded-xl mb-3 border border-[#E5E5E5]">
                     <div className="w-12 h-12 bg-white rounded-lg p-1 flex items-center justify-center shrink-0 border border-black/5">
-                      <img 
-                        src={firstItem?.image_url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=150&q=80'} 
-                        alt={firstItem?.product_name || 'Gear'} 
-                        className="max-h-full max-w-full object-contain" 
+                      <img
+                        src={getItemImage(firstItem)}
+                        alt={firstItem?.product_name || 'Gear'}
+                        className="max-h-full max-w-full object-contain"
                       />
                     </div>
                     <div className="overflow-hidden flex-1">
                       <div className="font-bold text-xs text-black truncate">{firstItem?.product_name || 'Gear Item'}</div>
                       <div className="text-[10px] text-gray-500 font-mono mt-0.5">
-                        {itemCount} {itemCount === 1 ? 'item' : 'items'} • Size: {firstItem?.variant_size || 'OS'}
+                        {itemCount} {itemCount === 1 ? 'item' : 'items'} • Size: {getItemVariantLabel(firstItem)}
                       </div>
                       <div className="text-[9px] text-gray-400 font-mono">
                         {new Date(order.created_at).toLocaleDateString()}
@@ -270,15 +282,15 @@ export default function OrdersPage() {
 
                 <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
                   <div className="w-12 h-12 bg-white rounded-lg p-1 border flex items-center justify-center shrink-0">
-                    <img 
-                      src={activeOrder.order_items?.[0]?.image_url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=150&q=80'} 
-                      alt="" 
+                    <img
+                      src={getItemImage(activeOrder.order_items?.[0])}
+                      alt=""
                       className="max-h-full max-w-full object-contain"
                     />
                   </div>
                   <div>
                     <div className="font-black text-xs text-black">{activeOrder.order_items?.[0]?.product_name || 'Nike Air Max'}</div>
-                    <div className="text-gray-500 font-mono text-[11px]">{activeOrder.order_items?.[0]?.variant_size || 'White / Size 10'}</div>
+                    <div className="text-gray-500 font-mono text-[11px]">{getItemVariantLabel(activeOrder.order_items?.[0])}</div>
                     <div className="text-gray-400 font-mono text-[10px]">Qty: {activeOrder.order_items?.[0]?.quantity || 1}</div>
                   </div>
                 </div>

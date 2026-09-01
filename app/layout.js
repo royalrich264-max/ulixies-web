@@ -4,12 +4,14 @@ import './globals.css';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
-import { 
-  getCart, 
-  getCurrentUser, 
-  getHomeProducts, 
-  getLocalWishlist, 
-  signOutUser 
+import {
+  getCart,
+  getCurrentUser,
+  getHomeProducts,
+  getWishlist,
+  getStoreContent,
+  getStoreSettings,
+  signOutUser
 } from '@/services/storeService';
 import { 
   ShoppingBag, 
@@ -22,14 +24,14 @@ import {
   Menu, 
   X, 
   Crown,
-  ShieldCheck,
-  ArrowRight,
-  Footprints,
-  Shirt,
-  Briefcase,
-  Percent,
-  Layers
+  ShieldCheck
 } from 'lucide-react';
+
+const DIVISION_ACTIVITIES = {
+  shoes: ['Gym & Training', 'Running', 'Lifestyle / Everyday', 'Basketball', 'Football / Soccer', 'Trail & Outdoor'],
+  clothing: ['Gym & Workout Shirts', 'Hoodies & Sweatshirts', 'Training Shorts', 'Track Pants & Tights', 'Jackets & Outerwear', 'Everyday Casual'],
+  accessories: ['Training Bags & Backpacks', 'Performance Socks', 'Caps & Headwear', 'Gloves & Gym Straps'],
+};
 
 export default function RootLayout({ children }) {
   const router = useRouter();
@@ -39,6 +41,8 @@ export default function RootLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hoveredDept, setHoveredDept] = useState(null);
   const [deptData, setDeptData] = useState({});
+  const [announcementBar, setAnnouncementBar] = useState('');
+  const [siteSettings, setSiteSettings] = useState({ store_name: 'ULIXIES RESELLER CORP', contact_email: '', phone: '' });
 
   // Search Engine State
   const [allProducts, setAllProducts] = useState([]);
@@ -57,8 +61,14 @@ export default function RootLayout({ children }) {
         const totalCart = (items || []).reduce((acc, item) => acc + (item.quantity || 1), 0);
         setCartCount(totalCart);
 
-        const saved = getLocalWishlist();
+        const saved = await getWishlist();
         setWishlistCount(saved.length);
+
+        const cmsContent = await getStoreContent('homepage_hero');
+        if (cmsContent?.announcementBar) setAnnouncementBar(cmsContent.announcementBar);
+
+        const generalSettings = await getStoreSettings('general');
+        if (generalSettings) setSiteSettings((prev) => ({ ...prev, ...generalSettings }));
 
         const allProds = await getHomeProducts();
         setAllProducts(allProds || []);
@@ -88,8 +98,9 @@ export default function RootLayout({ children }) {
 
     loadHeaderData();
 
-    const handleWishlistUpdate = () => {
-      setWishlistCount(getLocalWishlist().length);
+    const handleWishlistUpdate = async () => {
+      const list = await getWishlist();
+      setWishlistCount(list.length);
     };
     window.addEventListener('wishlist-updated', handleWishlistUpdate);
 
@@ -140,10 +151,20 @@ export default function RootLayout({ children }) {
     { id: 'sports', label: 'Sports & Performance', href: '/?dept=sports' },
   ];
 
+  const activeMegaDept = navDepartments.find((d) => d.id === hoveredDept);
+  const megaDeptQuery = hoveredDept && hoveredDept !== 'all' ? `dept=${hoveredDept}&` : '';
+
   return (
     <html lang="en">
       <body className="bg-white text-[#111111] antialiased min-h-screen flex flex-col font-sans selection:bg-[#111111] selection:text-white">
-        
+
+        {/* ANNOUNCEMENT BAR (admin-configurable via Storefront CMS) */}
+        {announcementBar && (
+          <div className="bg-black text-[#CCFF00] text-center text-[11px] font-bold uppercase tracking-wider py-2 px-4">
+            {announcementBar}
+          </div>
+        )}
+
         {/* ATHLETE PASSPORT BAR */}
         <div className="bg-[#F5F5F5] text-[#707072] border-b border-[#E5E5E5] px-6 h-9 flex items-center justify-between text-[11px] font-medium z-50 relative">
           <div className="flex items-center gap-6">
@@ -185,9 +206,9 @@ export default function RootLayout({ children }) {
         </div>
 
         {/* PRIMARY NAVIGATION HEADER */}
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#E5E5E5] px-6 h-16 flex items-center justify-between">
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#E5E5E5] px-6 h-16 flex items-center justify-between relative">
           <div className="flex items-center gap-8 h-full">
-            
+
             {/* BRAND LOGO WITH CROWN */}
             <Link href="/" className="flex items-center gap-2 group">
               <div className="w-8 h-8 rounded-lg bg-black text-[#CCFF00] flex items-center justify-center group-hover:bg-[#CCFF00] group-hover:text-black transition-colors shadow-sm">
@@ -198,122 +219,80 @@ export default function RootLayout({ children }) {
               </span>
             </Link>
 
-            {/* DESKTOP HOVERABLE FLYOUT DIRECTORY */}
+            {/* DESKTOP DEPARTMENT NAV */}
             <nav className="hidden lg:flex items-center gap-7 text-xs font-bold uppercase tracking-wider h-full">
-              {navDepartments.map((dept) => {
-                const stats = deptData[dept.id] || { total: 0, newDrops: 0, shoes: 0, clothes: 0, accessories: 0, sale: 0, recentProducts: [] };
-
-                return (
-                  <div
-                    key={dept.id}
-                    className="h-full flex items-center relative group"
-                    onMouseEnter={() => setHoveredDept(dept.id)}
-                    onMouseLeave={() => setHoveredDept(null)}
-                  >
-                    <Link
-                      href={dept.href}
-                      className="text-gray-800 hover:text-black transition-colors py-4 flex items-center gap-1 group-hover:text-black"
-                    >
-                      {dept.label}
-                    </Link>
-
-                    {hoveredDept === dept.id && (
-                      <div className="absolute top-16 left-0 w-[540px] bg-white border border-[#E5E5E5] shadow-2xl rounded-2xl p-5 z-50 text-left grid grid-cols-12 gap-6">
-                        
-                        <div className="col-span-6 border-r border-[#E5E5E5] pr-4 flex flex-col justify-between">
-                          <div>
-                            <div className="flex justify-between items-center border-b border-[#E5E5E5] pb-2 mb-3">
-                              <span className="font-black text-xs uppercase tracking-wider">{dept.label}</span>
-                              <span className="text-[10px] font-mono font-bold bg-[#111111] text-white px-2 py-0.5 rounded">
-                                {stats.total} TOTAL
-                              </span>
-                            </div>
-
-                            <div className="space-y-1 text-xs font-bold">
-                              <Link
-                                href={dept.id === 'all' ? '/?sub=all' : `/?dept=${dept.id}&sub=all`}
-                                className="flex justify-between items-center p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                              >
-                                <span className="flex items-center gap-2"><Layers className="w-3.5 h-3.5 text-gray-700" /> All Articles</span>
-                                <span className="font-mono text-gray-400 font-normal">{stats.total}</span>
-                              </Link>
-
-                              <Link
-                                href={dept.id === 'all' ? '/?sub=shoes' : `/?dept=${dept.id}&sub=shoes`}
-                                className="flex justify-between items-center p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                              >
-                                <span className="flex items-center gap-2"><Footprints className="w-3.5 h-3.5 text-gray-700" /> Shoes</span>
-                                <span className="font-mono text-gray-400 font-normal">{stats.shoes}</span>
-                              </Link>
-
-                              <Link
-                                href={dept.id === 'all' ? '/?sub=clothes' : `/?dept=${dept.id}&sub=clothes`}
-                                className="flex justify-between items-center p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                              >
-                                <span className="flex items-center gap-2"><Shirt className="w-3.5 h-3.5 text-gray-700" /> Clothes</span>
-                                <span className="font-mono text-gray-400 font-normal">{stats.clothes}</span>
-                              </Link>
-
-                              <Link
-                                href={dept.id === 'all' ? '/?sub=accessories' : `/?dept=${dept.id}&sub=accessories`}
-                                className="flex justify-between items-center p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                              >
-                                <span className="flex items-center gap-2"><Briefcase className="w-3.5 h-3.5 text-gray-700" /> Accessories</span>
-                                <span className="font-mono text-gray-400 font-normal">{stats.accessories}</span>
-                              </Link>
-
-                              <Link
-                                href={dept.id === 'all' ? '/?sub=sale' : `/?dept=${dept.id}&sub=sale`}
-                                className="flex justify-between items-center p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
-                              >
-                                <span className="flex items-center gap-2"><Percent className="w-3.5 h-3.5" /> Sales</span>
-                                <span className="font-mono font-bold">{stats.sale}</span>
-                              </Link>
-                            </div>
-                          </div>
-
-                          <Link
-                            href={dept.href}
-                            className="text-[10px] font-mono font-bold text-black flex items-center justify-between hover:underline pt-3 border-t border-[#E5E5E5] mt-3"
-                          >
-                            <span>EXPLORE ALL {dept.label.toUpperCase()}</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </Link>
-                        </div>
-
-                        <div className="col-span-6 space-y-2">
-                          <div className="text-[10px] font-mono uppercase font-bold text-gray-400">Featured Releases</div>
-                          {stats.recentProducts && stats.recentProducts.length > 0 ? (
-                            stats.recentProducts.map((p) => {
-                              const img = p.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=300&q=80';
-                              return (
-                                <Link
-                                  key={p.id}
-                                  href={`/product?slug=${p.slug}`}
-                                  className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-gray-50 border border-transparent hover:border-[#E5E5E5] transition-all"
-                                >
-                                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center p-1 shrink-0 overflow-hidden border">
-                                    <img src={img} alt={p.name} className="object-contain max-h-full max-w-full" />
-                                  </div>
-                                  <div className="overflow-hidden">
-                                    <div className="font-bold text-[11px] truncate text-black">{p.name}</div>
-                                    <div className="font-mono text-[10px] text-gray-500 font-bold">${p.sale_price ?? p.base_price}</div>
-                                  </div>
-                                </Link>
-                              );
-                            })
-                          ) : (
-                            <div className="text-[10px] text-gray-400 italic py-4 text-center">No active drops</div>
-                          )}
-                        </div>
-
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {navDepartments.map((dept) => (
+                <Link
+                  key={dept.id}
+                  href={dept.href}
+                  onMouseEnter={() => setHoveredDept(dept.id)}
+                  onMouseLeave={() => setHoveredDept(null)}
+                  className="h-full flex items-center text-gray-800 hover:text-black transition-colors"
+                >
+                  {dept.label}
+                </Link>
+              ))}
             </nav>
           </div>
+
+          {/* FULL-WIDTH MEGA MENU PANEL */}
+          {activeMegaDept && (
+            <div
+              onMouseEnter={() => setHoveredDept(activeMegaDept.id)}
+              onMouseLeave={() => setHoveredDept(null)}
+              className="hidden lg:block absolute left-0 right-0 top-full bg-white border-b border-[#E5E5E5] shadow-lg z-50"
+            >
+              <div className="max-w-[1440px] mx-auto px-10 py-10 grid grid-cols-4 gap-10 text-left normal-case">
+
+                <div>
+                  <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Highlights</h4>
+                  <div className="flex flex-col gap-2.5 text-[13px] font-medium">
+                    <Link href={`/?${megaDeptQuery}sub=all`} className="text-gray-500 hover:text-black hover:underline w-fit">All Articles</Link>
+                    <Link href={`/?${megaDeptQuery}sub=new-arrivals`} className="text-gray-500 hover:text-black hover:underline w-fit">New Arrivals</Link>
+                    <Link href={`/?${megaDeptQuery}sub=best-sellers`} className="text-gray-500 hover:text-black hover:underline w-fit">Best Sellers</Link>
+                    <Link href={`/?${megaDeptQuery}sub=sale`} className="text-red-600 hover:underline w-fit">Sale</Link>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Shoes</h4>
+                  <div className="flex flex-col gap-2.5 text-[13px] font-medium">
+                    <Link href={`/?${megaDeptQuery}sub=shoes`} className="text-gray-500 hover:text-black hover:underline w-fit">All Shoes</Link>
+                    {DIVISION_ACTIVITIES.shoes.map((act) => (
+                      <Link key={act} href={`/?${megaDeptQuery}sub=shoes&activity=${encodeURIComponent(act)}`} className="text-gray-500 hover:text-black hover:underline w-fit">
+                        {act}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Clothing</h4>
+                  <div className="flex flex-col gap-2.5 text-[13px] font-medium">
+                    <Link href={`/?${megaDeptQuery}sub=clothes`} className="text-gray-500 hover:text-black hover:underline w-fit">All Clothing</Link>
+                    {DIVISION_ACTIVITIES.clothing.map((act) => (
+                      <Link key={act} href={`/?${megaDeptQuery}sub=clothes&activity=${encodeURIComponent(act)}`} className="text-gray-500 hover:text-black hover:underline w-fit">
+                        {act}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Accessories</h4>
+                  <div className="flex flex-col gap-2.5 text-[13px] font-medium">
+                    <Link href={`/?${megaDeptQuery}sub=accessories`} className="text-gray-500 hover:text-black hover:underline w-fit">All Accessories</Link>
+                    {DIVISION_ACTIVITIES.accessories.map((act) => (
+                      <Link key={act} href={`/?${megaDeptQuery}sub=accessories&activity=${encodeURIComponent(act)}`} className="text-gray-500 hover:text-black hover:underline w-fit">
+                        {act}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
 
           {/* ACTION BUTTONS & SEARCH INPUT */}
           <div className="flex items-center gap-3">
@@ -435,15 +414,24 @@ export default function RootLayout({ children }) {
         {/* FOOTER */}
         <footer className="bg-[#111111] text-white border-t border-[#222222] py-12 px-6 mt-20">
           <div className="max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-gray-400 font-mono">
-            <div className="flex items-center gap-2">
-              <Crown className="w-4 h-4 text-[#CCFF00]" />
-              <span>© 2026 ULIXIES RESELLER CORP. ALL RIGHTS RESERVED.</span>[cite: 1]
+            <div className="flex flex-col items-center md:items-start gap-1">
+              <div className="flex items-center gap-2">
+                <Crown className="w-4 h-4 text-[#CCFF00]" />
+                <span>© {new Date().getFullYear()} {siteSettings.store_name}. ALL RIGHTS RESERVED.</span>
+              </div>
+              {(siteSettings.contact_email || siteSettings.phone) && (
+                <div className="text-[11px] text-gray-500">
+                  {siteSettings.contact_email}
+                  {siteSettings.contact_email && siteSettings.phone && ' • '}
+                  {siteSettings.phone}
+                </div>
+              )}
             </div>
             <div className="flex gap-6 uppercase font-bold">
               <Link href="/orders" className="hover:text-white">Orders</Link>
               <Link href="/addresses" className="hover:text-white">Addresses</Link>
               <Link href="/wishlist" className="hover:text-white">Saved Gear</Link>
-              <Link href="/admin" className="hover:text-[#CCFF00]">Admin Tower</Link>
+              <Link href="/support" className="hover:text-white">Customer Support</Link>
             </div>
           </div>
         </footer>

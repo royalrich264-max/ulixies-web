@@ -4,12 +4,13 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import SplashScreen from '@/components/SplashScreen';
-import { 
-  getHomeProducts, 
-  getCart, 
-  addToCart, 
-  getLocalWishlist, 
-  toggleWishlistProduct 
+import {
+  getHomeProducts,
+  getCart,
+  addToCart,
+  getWishlist,
+  toggleWishlistItem,
+  getStoreContent
 } from '@/services/storeService';
 import { 
   Plus, 
@@ -216,16 +217,12 @@ function HomeContent() {
   const [selectedVariant, setSelectedVariant] = useState(null);
   
   const [heroQuantity, setHeroQuantity] = useState(1);
-  const [loadoutQuantity, setLoadoutQuantity] = useState(1);
 
   const [currentAngle, setCurrentAngle] = useState(0);
   const [isAutoRotating, setIsAutoRotating] = useState(true);
   const [loadingAdd, setLoadingAdd] = useState(false);
   const [wishlistIds, setWishlistIds] = useState([]);
-
-  const [loadoutColor, setLoadoutColor] = useState('Crimson');
-  const [loadoutImg, setLoadoutImg] = useState('https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80');
-  const [loadoutSize, setLoadoutSize] = useState('10');
+  const [cmsContent, setCmsContent] = useState(null);
 
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
@@ -252,14 +249,20 @@ function HomeContent() {
         setSelectedVariant(null);
       }
 
-      const saved = getLocalWishlist();
+      const saved = await getWishlist();
       setWishlistIds(saved.map((s) => s.id));
     }
 
     loadData();
   }, [activeDept]);
 
-  const shoeAngleFrames = heroProduct?.product_images?.length > 0 
+  useEffect(() => {
+    getStoreContent('homepage_hero').then((content) => {
+      if (content) setCmsContent(content);
+    });
+  }, []);
+
+  const shoeAngleFrames = heroProduct?.product_images?.length > 0
     ? heroProduct.product_images.map(img => img.url)
     : [
         "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1000&q=80",
@@ -329,10 +332,10 @@ function HomeContent() {
     router.push(targetUrl);
   };
 
-  const handleToggleHeart = (e, product) => {
+  const handleToggleHeart = async (e, product) => {
     e.preventDefault();
     e.stopPropagation();
-    const updated = toggleWishlistProduct(product);
+    const updated = await toggleWishlistItem(product);
     setWishlistIds(updated.map((u) => u.id));
   };
 
@@ -361,6 +364,8 @@ function HomeContent() {
     else if (activeSub === 'clothes') matchesSub = p.primary_category === 'clothing';
     else if (activeSub === 'accessories') matchesSub = p.primary_category === 'accessories';
     else if (activeSub === 'sale') matchesSub = hasDiscount;
+    else if (activeSub === 'new-arrivals') matchesSub = p.is_new === true;
+    else if (activeSub === 'best-sellers') matchesSub = p.is_best_seller === true;
 
     if (!matchesSub) return false;
 
@@ -381,9 +386,18 @@ function HomeContent() {
     { id: 'sale', label: 'Sales', icon: Percent },
   ];
 
-  const currentHeroBanner = HERO_BANNER_CONFIG[activeDept]?.[activeSub] || 
-                            HERO_BANNER_CONFIG['all']?.[activeSub] || 
+  const isDefaultHomeView = activeDept === 'all' && activeSub === 'all';
+  const baseHeroBanner = HERO_BANNER_CONFIG[activeDept]?.[activeSub] ||
+                            HERO_BANNER_CONFIG['all']?.[activeSub] ||
                             HERO_BANNER_CONFIG['all']['all'];
+
+  const currentHeroBanner = isDefaultHomeView && cmsContent
+    ? {
+        ...baseHeroBanner,
+        headline: cmsContent.headline || baseHeroBanner.headline,
+        desc: cmsContent.subheadline || baseHeroBanner.desc,
+      }
+    : baseHeroBanner;
 
   const heroHasDiscount = heroProduct?.sale_price && Number(heroProduct.sale_price) < Number(heroProduct.base_price);
   const heroDiscountPct = heroHasDiscount ? Math.round(((heroProduct.base_price - heroProduct.sale_price) / heroProduct.base_price) * 100) : null;
@@ -412,6 +426,15 @@ function HomeContent() {
           <p className="text-gray-300 text-sm max-w-lg mt-4 leading-relaxed font-medium">
             {currentHeroBanner.desc}
           </p>
+
+          {isDefaultHomeView && (
+            <Link
+              href="/shop"
+              className="inline-block mt-5 px-6 py-3 bg-[#CCFF00] text-black text-xs font-black uppercase tracking-wider rounded-full hover:bg-white transition-colors"
+            >
+              {cmsContent?.cta_text || 'SHOP ARCHIVE'}
+            </Link>
+          )}
 
           <div className="flex items-center gap-3 mt-6">
             <span className="px-3 py-1 bg-white/10 border border-white/20 rounded-full text-[10px] font-mono font-bold uppercase text-gray-300">
@@ -725,6 +748,24 @@ function HomeContent() {
                 <h3 className="font-bold uppercase text-sm">No Articles Found for this Activity</h3>
                 <p className="text-xs text-gray-500 mt-1">Try selecting another activity from the vertical list.</p>
               </div>
+            ) : activeDept === 'all' ? (
+              <div className="space-y-10">
+                {['men', 'women', 'kids', 'sports'].map((deptKey) => {
+                  const deptProducts = displayedProducts.filter((p) => p.department === deptKey);
+                  if (deptProducts.length === 0) return null;
+                  return (
+                    <div key={deptKey}>
+                      <div className="flex justify-between items-baseline border-b border-[#E5E5E5] pb-3 mb-5">
+                        <h3 className="text-lg font-black uppercase tracking-tight text-black">{deptKey}</h3>
+                        <span className="text-xs font-mono font-bold text-gray-500">{deptProducts.length} ITEMS</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {deptProducts.map((p) => renderProductCard(p, wishlistIds, handleToggleHeart))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {displayedProducts.map((p) => renderProductCard(p, wishlistIds, handleToggleHeart))}
@@ -734,160 +775,6 @@ function HomeContent() {
 
         </div>
       </section>
-
-      {/* 5. LOADOUT ROOM CALIBRATION STATION */}
-      {activeDept === 'all' && activeSub === 'all' && (
-        <section id="loadout-room" className="py-20 border-t border-[#E5E5E5] bg-[#111111] text-white">
-          <div className="max-w-[1440px] mx-auto px-6">
-            <div className="bg-[#1E1E1E] border border-white/10 rounded-3xl p-8 lg:p-14 relative">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-                
-                <div className="lg:col-span-4 space-y-6">
-                  <div className="text-xs font-mono uppercase text-[#CCFF00] tracking-widest">[ LOADOUT CALIBRATION ]</div>
-                  <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-white font-sans">
-                    AIR MAX PULSE 26
-                  </h2>
-                  <div className="text-2xl font-mono font-bold text-white">$165.00</div>
-
-                  <div className="space-y-4 pt-4 border-t border-white/10">
-                    <div>
-                      <div className="flex justify-between text-xs font-mono mb-1">
-                        <span className="text-gray-400">ENERGY REBOUND</span>
-                        <span className="text-white font-bold">92%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
-                        <div className="h-full bg-[#CCFF00]" style={{ width: '92%' }}></div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-xs font-mono mb-1">
-                        <span className="text-gray-400">CUSHION SOFTNESS</span>
-                        <span className="text-white font-bold">88%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
-                        <div className="h-full bg-[#CCFF00]" style={{ width: '88%' }}></div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-xs font-mono mb-1">
-                        <span className="text-gray-400">TRACTION STABILITY</span>
-                        <span className="text-white font-bold">95%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-black rounded-full overflow-hidden">
-                        <div className="h-full bg-[#CCFF00]" style={{ width: '95%' }}></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-4 flex items-center justify-center">
-                  <div className="relative w-full aspect-square bg-black/40 rounded-2xl border border-white/10 flex items-center justify-center p-8">
-                    <img
-                      src={loadoutImg} 
-                      alt="Air Max Loadout" 
-                      className="w-full h-auto object-contain drop-shadow-[0_20px_35px_rgba(0,0,0,0.9)]" 
-                    />
-                  </div>
-                </div>
-
-                <div className="lg:col-span-4 space-y-6">
-                  <div>
-                    <label className="block text-xs font-mono uppercase text-gray-400 mb-2">CHASSIS COLORWAY: {loadoutColor}</label>
-                    <div className="flex gap-3">
-                      <button 
-                        onClick={() => {
-                          setLoadoutColor('Crimson');
-                          setLoadoutImg('https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80');
-                        }} 
-                        className={`w-9 h-9 rounded-full bg-red-600 border-2 cursor-pointer ${loadoutColor === 'Crimson' ? 'border-white ring-2 ring-[#CCFF00]' : 'border-transparent'}`}
-                      />
-                      <button 
-                        onClick={() => {
-                          setLoadoutColor('White Smoke');
-                          setLoadoutImg('https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&w=800&q=80');
-                        }} 
-                        className={`w-9 h-9 rounded-full bg-white border-2 cursor-pointer ${loadoutColor === 'White Smoke' ? 'border-white ring-2 ring-[#CCFF00]' : 'border-transparent'}`}
-                      />
-                      <button 
-                        onClick={() => {
-                          setLoadoutColor('Phantom Black');
-                          setLoadoutImg('https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=800&q=80');
-                        }} 
-                        className={`w-9 h-9 rounded-full bg-gray-900 border-2 cursor-pointer ${loadoutColor === 'Phantom Black' ? 'border-white ring-2 ring-[#CCFF00]' : 'border-transparent'}`}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-mono uppercase text-gray-400 mb-2">SPEC SIZE (US)</label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {['8', '9', '10', '11'].map((sz) => (
-                        <button 
-                          key={sz}
-                          onClick={() => setLoadoutSize(sz)} 
-                          className={`py-2.5 rounded text-xs font-bold transition-all cursor-pointer ${
-                            loadoutSize === sz 
-                              ? 'bg-white text-black border border-white' 
-                              : 'bg-white/5 border border-white/10 text-white hover:border-white'
-                          }`}
-                        >
-                          {sz}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between border border-white/10 rounded-xl p-3 bg-black/40">
-                    <div>
-                      <div className="text-xs font-mono uppercase text-gray-300">CALIBRATE QUANTITY</div>
-                      <div className="text-[10px] text-gray-500 font-mono">
-                        Subtotal: ${(165.00 * loadoutQuantity).toFixed(2)}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setLoadoutQuantity((prev) => Math.max(1, prev - 1))}
-                        className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white font-bold flex items-center justify-center hover:bg-white hover:text-black transition-colors cursor-pointer"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-
-                      <span className="font-mono font-black text-sm text-white w-6 text-center">
-                        {loadoutQuantity}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => setLoadoutQuantity((prev) => prev + 1)}
-                        className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white font-bold flex items-center justify-center hover:bg-white hover:text-black transition-colors cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <button 
-                    onClick={async () => {
-                      const { id: cartId } = await getCart();
-                      await addToCart(cartId, null, loadoutQuantity, heroProduct?.id);
-                      alert(`${loadoutQuantity} pair(s) of Air Max Pulse 26 (${loadoutColor} - US ${loadoutSize}) added to bag.`);
-                      window.location.reload();
-                    }}
-                    className="w-full py-4 bg-white text-black font-bold text-xs uppercase tracking-widest rounded-full hover:bg-[#CCFF00] transition-all shadow-xl cursor-pointer"
-                  >
-                    [ EQUIP / ADD {loadoutQuantity} TO BAG ]
-                  </button>
-                </div>
-
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
 
     </div>
   );
