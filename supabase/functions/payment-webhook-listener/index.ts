@@ -1,9 +1,15 @@
 // supabase/functions/payment-webhook-listener/index.ts
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Stripe from "https://esm.sh/stripe@14.14.0?target=deno";
+//
+// Imports Stripe and supabase-js via Deno's native `npm:` specifier rather than
+// esm.sh — esm.sh's Deno-target bundle of Stripe pulls in a Node `process` polyfill
+// that calls `Deno.core.runMicrotasks()`, which no longer exists on Supabase's
+// current Deno 2.x edge runtime and crashes the whole request with an uncaught
+// exception (surfaces as a bare 400 with no readable error). `npm:` specifiers use
+// Deno's real Node-compat layer instead, which doesn't hit that broken path.
+import { createClient } from "npm:@supabase/supabase-js@2";
+import Stripe from "npm:stripe@14.14.0";
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200 });
   }
@@ -29,7 +35,17 @@ serve(async (req) => {
   const body = await req.text();
 
   try {
-    const event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
+    // Deno has no built-in Node `crypto` module, which Stripe's SDK normally relies on
+    // for signature verification — without this explicit provider, constructEventAsync
+    // throws before any of the logic below ever runs.
+    const cryptoProvider = Stripe.createSubtleCryptoProvider();
+    const event = await stripe.webhooks.constructEventAsync(
+      body,
+      signature,
+      webhookSecret,
+      undefined,
+      cryptoProvider
+    );
 
     if (event.type === "payment_intent.succeeded") {
       const intent = event.data.object as Stripe.PaymentIntent;

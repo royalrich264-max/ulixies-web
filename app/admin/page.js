@@ -577,6 +577,26 @@ export default function CrownAdminControlTower() {
     }
   };
 
+  const handleDeleteOrder = async (order) => {
+    if (!confirm(`Permanently delete order ${order.order_number || order.id}? This cannot be undone.`)) return;
+    try {
+      // Clear child rows first (payments/coupon_usage/returns/order_items all reference
+      // orders.id) so the delete below doesn't fail on a foreign-key constraint.
+      await supabase.from('payments').delete().eq('order_id', order.id);
+      await supabase.from('coupon_usage').delete().eq('order_id', order.id);
+      await supabase.from('returns').delete().eq('order_id', order.id);
+      await supabase.from('order_items').delete().eq('order_id', order.id);
+
+      const { error } = await supabase.from('orders').delete().eq('id', order.id);
+      if (error) throw error;
+
+      alert('Order deleted.');
+      await refreshAll();
+    } catch (err) {
+      alert(`Delete failed: ${err.message}`);
+    }
+  };
+
   const handleToggleSaleDiscount = async (product, enableSale, customDiscountPercent = 20) => {
     try {
       const calculatedSalePrice = enableSale
@@ -1952,6 +1972,13 @@ export default function CrownAdminControlTower() {
                           className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-center font-bold uppercase text-white flex items-center justify-center gap-1.5 transition-all"
                         >
                           <FileText className="w-3.5 h-3.5 text-[#CCFF00]" /> Full Invoice & Audit
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteOrder(o)}
+                          className="w-full py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 rounded-xl text-center font-bold uppercase text-red-300 flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete Order
                         </button>
                       </div>
                     </div>

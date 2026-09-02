@@ -9,16 +9,15 @@
 // `order_id` — those need to be reconciled to the real `payments` table
 // schema before this is used, or it will either fail on missing columns or
 // create a second, disconnected trail of payment records.
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Stripe from "https://esm.sh/stripe@14.14.0?target=deno";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import Stripe from "npm:stripe@14.14.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

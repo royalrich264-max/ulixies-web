@@ -1,13 +1,16 @@
 // supabase/functions/create-unified-payment-intent/index.ts
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@14.14.0?target=deno";
+//
+// Uses Deno's native `npm:` specifier for Stripe rather than esm.sh — esm.sh's
+// Deno-target bundle pulls in a Node `process` polyfill that can crash on Supabase's
+// current Deno 2.x edge runtime (see payment-webhook-listener for the exact error).
+import Stripe from "npm:stripe@14.14.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
