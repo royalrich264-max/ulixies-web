@@ -223,6 +223,7 @@ function HomeContent() {
   const [loadingAdd, setLoadingAdd] = useState(false);
   const [wishlistIds, setWishlistIds] = useState([]);
   const [cmsContent, setCmsContent] = useState(null);
+  const [expandedGroups, setExpandedGroups] = useState({});
 
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
@@ -749,7 +750,7 @@ function HomeContent() {
                 <p className="text-xs text-gray-500 mt-1">Try selecting another activity from the vertical list.</p>
               </div>
             ) : activeDept === 'all' ? (
-              <div className="space-y-10">
+              <div className="space-y-12">
                 {['men', 'women', 'kids', 'sports'].map((deptKey) => {
                   const deptProducts = displayedProducts.filter((p) => p.department === deptKey);
                   if (deptProducts.length === 0) return null;
@@ -759,8 +760,39 @@ function HomeContent() {
                         <h3 className="text-lg font-black uppercase tracking-tight text-black">{deptKey}</h3>
                         <span className="text-xs font-mono font-bold text-gray-500">{deptProducts.length} ITEMS</span>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {deptProducts.map((p) => renderProductCard(p, wishlistIds, handleToggleHeart))}
+                      <div className="space-y-8">
+                        {[
+                          { key: 'shoes', label: 'Shoes' },
+                          { key: 'clothing', label: 'Clothing' },
+                          { key: 'accessories', label: 'Accessories' },
+                        ].map((division) => {
+                          const divisionProducts = deptProducts.filter((p) => p.primary_category === division.key);
+                          if (divisionProducts.length === 0) return null;
+                          const groupKey = `${deptKey}-${division.key}`;
+                          const isExpanded = !!expandedGroups[groupKey];
+                          const visibleProducts = isExpanded ? divisionProducts : divisionProducts.slice(0, 5);
+                          return (
+                            <div key={division.key}>
+                              <div className="flex justify-between items-center mb-3">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                                  {deptKey} {division.label}
+                                </h4>
+                                <span className="text-[10px] font-mono text-gray-400">{divisionProducts.length} ITEMS</span>
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                                {visibleProducts.map((p) => renderProductCard(p, wishlistIds, handleToggleHeart))}
+                              </div>
+                              {divisionProducts.length > 5 && (
+                                <button
+                                  onClick={() => setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))}
+                                  className="mt-3 text-xs font-bold uppercase tracking-wider text-black underline hover:text-gray-600 cursor-pointer"
+                                >
+                                  {isExpanded ? 'Show Less' : `View All ${divisionProducts.length} ${division.label}`}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
