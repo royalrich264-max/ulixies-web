@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getCart, removeFromCart } from '@/services/storeService';
-import { Trash2 } from 'lucide-react';
+import { Trash2, ImageOff } from 'lucide-react';
 
 export default function CartPage() {
   const [cart, setCart] = useState({ items: [] });
@@ -43,7 +43,13 @@ export default function CartPage() {
           <div className="md:col-span-2 space-y-4">
             {cart.items.map((item) => (
               <div key={item.id} className="flex gap-4 p-4 border border-[#E5E5E5] rounded-xl items-center justify-between">
-                <img src={item.product_variants?.products?.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=200&q=80'} className="w-20 h-20 object-contain bg-[#F5F5F5] rounded-lg p-2" />
+                {item.product_variants?.products?.product_images?.[0]?.url ? (
+                  <img src={item.product_variants.products.product_images[0].url} className="w-20 h-20 object-contain bg-[#F5F5F5] rounded-lg p-2" />
+                ) : (
+                  <div className="w-20 h-20 flex items-center justify-center bg-[#F5F5F5] rounded-lg text-gray-300">
+                    <ImageOff className="w-6 h-6" />
+                  </div>
+                )}
                 <div className="flex-1">
                   <h4 className="font-bold text-sm">{item.product_variants?.products?.name}</h4>
                   <p className="text-xs text-gray-500 font-mono">Size: {item.product_variants?.size || 'OS'} | Qty: {item.quantity}</p>

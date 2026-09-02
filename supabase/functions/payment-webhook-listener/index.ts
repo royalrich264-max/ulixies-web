@@ -124,6 +124,9 @@ Deno.serve(async (req) => {
       status: 200,
     });
   } catch (err) {
+    // Logged explicitly so the real error text shows up in Supabase's Logs tab —
+    // the response body isn't visible there, only in Stripe's own delivery detail view.
+    console.error("WEBHOOK_ERROR:", err.message, err.stack);
     return new Response(`Webhook Error: ${err.message}`, { status: 400 });
   }
 });

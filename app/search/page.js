@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { getHomeProducts, toggleWishlistItem, getWishlist } from '@/services/storeService';
-import { Search, Heart, X, Footprints, Shirt, Briefcase, Layers } from 'lucide-react';
+import { Search, Heart, X, Footprints, Shirt, Briefcase, Layers, ImageOff } from 'lucide-react';
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -160,17 +160,21 @@ function SearchContent() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {filtered.map((p) => {
             const isLiked = wishlistIds.includes(p.id);
-            const img = p.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=700&q=80';
-            
+            const img = p.product_images?.[0]?.url;
+
             return (
               <div key={p.id} className="group relative flex flex-col justify-between">
                 <div className="bg-[#F5F5F5] rounded-2xl overflow-hidden aspect-square flex items-center justify-center p-4 border border-[#E5E5E5] mb-3 relative">
                   <Link href={`/product?slug=${p.slug}`} className="w-full h-full flex items-center justify-center">
-                    <img 
-                      src={img} 
-                      alt={p.name} 
-                      className="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300" 
-                    />
+                    {img ? (
+                      <img
+                        src={img}
+                        alt={p.name}
+                        className="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <ImageOff className="w-8 h-8 text-gray-300" />
+                    )}
                   </Link>
                   {p.is_new && (
                     <span className="absolute top-3 left-3 bg-white text-[9px] font-mono font-bold px-2 py-0.5 border border-[#E5E5E5] rounded">

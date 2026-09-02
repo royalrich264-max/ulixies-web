@@ -13,18 +13,19 @@ import {
   getStoreSettings,
   signOutUser
 } from '@/services/storeService';
-import { 
-  ShoppingBag, 
-  Search, 
-  Heart, 
-  Package, 
-  MapPin, 
-  User, 
-  LogOut, 
-  Menu, 
-  X, 
+import {
+  ShoppingBag,
+  Search,
+  Heart,
+  Package,
+  MapPin,
+  User,
+  LogOut,
+  Menu,
+  X,
   Crown,
-  ShieldCheck
+  ShieldCheck,
+  ImageOff
 } from 'lucide-react';
 
 const DIVISION_ACTIVITIES = {
@@ -323,7 +324,7 @@ export default function RootLayout({ children }) {
                   {searchResults.length > 0 ? (
                     <div className="space-y-2">
                       {searchResults.map((prod) => {
-                        const img = prod.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=200&q=80';
+                        const img = prod.product_images?.[0]?.url;
                         return (
                           <Link
                             key={prod.id}
@@ -332,7 +333,11 @@ export default function RootLayout({ children }) {
                             className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 border border-transparent hover:border-[#E5E5E5] transition-all"
                           >
                             <div className="w-10 h-10 bg-gray-100 rounded-lg p-1 shrink-0 flex items-center justify-center border">
-                              <img src={img} alt={prod.name} className="object-contain max-h-full max-w-full" />
+                              {img ? (
+                                <img src={img} alt={prod.name} className="object-contain max-h-full max-w-full" />
+                              ) : (
+                                <ImageOff className="w-4 h-4 text-gray-300" />
+                              )}
                             </div>
                             <div className="overflow-hidden flex-1">
                               <div className="font-bold text-xs text-black truncate">{prod.name}</div>

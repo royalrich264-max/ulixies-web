@@ -29,7 +29,8 @@ import {
   Play,
   Tag,
   Flame,
-  Check
+  Check,
+  ImageOff
 } from 'lucide-react';
 
 const HERO_BANNER_CONFIG = {
@@ -272,14 +273,7 @@ function HomeContent() {
 
   const shoeAngleFrames = heroProduct?.product_images?.length > 0
     ? heroProduct.product_images.map(img => img.url)
-    : [
-        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1600185365926-3a2ce3cdb9eb?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=1000&q=80"
-      ];
+    : [];
 
   useEffect(() => {
     if (!isAutoRotating || shoeAngleFrames.length <= 1) return;
@@ -573,13 +567,20 @@ function HomeContent() {
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
                 >
-                  <img
-                    src={shoeAngleFrames[frameIndex]}
-                    alt={heroProduct.name}
-                    style={{ transform: `scaleX(${scaleX})` }}
-                    className="max-h-full max-w-full object-contain pointer-events-none drop-shadow-2xl transition-transform duration-75"
-                  />
-                  
+                  {shoeAngleFrames.length > 0 ? (
+                    <img
+                      src={shoeAngleFrames[frameIndex]}
+                      alt={heroProduct.name}
+                      style={{ transform: `scaleX(${scaleX})` }}
+                      className="max-h-full max-w-full object-contain pointer-events-none drop-shadow-2xl transition-transform duration-75"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                      <ImageOff className="w-10 h-10" />
+                      <span className="text-xs font-mono uppercase">No image available</span>
+                    </div>
+                  )}
+
                   <div className="absolute bottom-2 left-2 bg-white/95 border border-[#E5E5E5] px-3 py-1.5 rounded text-[11px] font-mono flex items-center gap-1.5 shadow-sm">
                     <RotateCw className="w-3 h-3 animate-spin text-gray-400" />
                     ROTATION: <span className="font-bold text-black">{String(Math.round(currentAngle)).padStart(3, '0')}°</span>
@@ -873,7 +874,7 @@ function HomeContent() {
 
 function renderProductCard(p, wishlistIds, handleToggleHeart, openSizePickerId, onToggleSizePicker, onQuickAdd) {
   const isLiked = wishlistIds.includes(p.id);
-  const mainImg = p.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=700&q=80';
+  const mainImg = p.product_images?.[0]?.url;
 
   // Real dynamic sale detection
   const hasDiscount = p.sale_price && Number(p.sale_price) < Number(p.base_price);
@@ -891,11 +892,15 @@ function renderProductCard(p, wishlistIds, handleToggleHeart, openSizePickerId, 
       <div className="bg-[#F5F5F5] rounded-2xl overflow-hidden relative aspect-square flex items-center justify-center mb-3 border border-[#E5E5E5]">
         
         <Link href={`/product?slug=${p.slug}`} className="w-full h-full flex items-center justify-center">
-          <img
-            src={mainImg}
-            alt={p.name}
-            className="w-full h-full object-contain group-hover:scale-105 transition-all duration-300"
-          />
+          {mainImg ? (
+            <img
+              src={mainImg}
+              alt={p.name}
+              className="w-full h-full object-contain group-hover:scale-105 transition-all duration-300"
+            />
+          ) : (
+            <ImageOff className="w-8 h-8 text-gray-300" />
+          )}
         </Link>
 
         {/* Dynamic Discount Tag */}

@@ -3,19 +3,20 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getUserOrders, getCurrentUser, submitProductReturn, uploadReturnPhoto } from '@/services/storeService';
-import { 
-  Package, 
-  Truck, 
-  CheckCircle2, 
-  Clock, 
-  FileText, 
-  ArrowRight, 
-  Layers, 
+import {
+  Package,
+  Truck,
+  CheckCircle2,
+  Clock,
+  FileText,
+  ArrowRight,
+  Layers,
   Crown,
   RotateCcw,
   X,
   Upload,
-  Check
+  Check,
+  ImageOff
 } from 'lucide-react';
 
 const RETURN_REASONS = [
@@ -29,8 +30,7 @@ const RETURN_REASONS = [
 ];
 
 function getItemImage(item) {
-  return item?.product_variants?.products?.product_images?.[0]?.url
-    || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=150&q=80';
+  return item?.product_variants?.products?.product_images?.[0]?.url || null;
 }
 
 function getItemVariantLabel(item) {
@@ -184,11 +184,15 @@ export default function OrdersPage() {
 
                   <div className="flex items-center gap-3 p-2 bg-[#F9F9F9] rounded-xl mb-3 border border-[#E5E5E5]">
                     <div className="w-12 h-12 bg-white rounded-lg p-1 flex items-center justify-center shrink-0 border border-black/5">
-                      <img
-                        src={getItemImage(firstItem)}
-                        alt={firstItem?.product_name || 'Gear'}
-                        className="max-h-full max-w-full object-contain"
-                      />
+                      {getItemImage(firstItem) ? (
+                        <img
+                          src={getItemImage(firstItem)}
+                          alt={firstItem?.product_name || 'Gear'}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <ImageOff className="w-5 h-5 text-gray-300" />
+                      )}
                     </div>
                     <div className="overflow-hidden flex-1">
                       <div className="font-bold text-xs text-black truncate">{firstItem?.product_name || 'Gear Item'}</div>
@@ -282,14 +286,18 @@ export default function OrdersPage() {
 
                 <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
                   <div className="w-12 h-12 bg-white rounded-lg p-1 border flex items-center justify-center shrink-0">
-                    <img
-                      src={getItemImage(activeOrder.order_items?.[0])}
-                      alt=""
-                      className="max-h-full max-w-full object-contain"
-                    />
+                    {getItemImage(activeOrder.order_items?.[0]) ? (
+                      <img
+                        src={getItemImage(activeOrder.order_items?.[0])}
+                        alt=""
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <ImageOff className="w-5 h-5 text-gray-300" />
+                    )}
                   </div>
                   <div>
-                    <div className="font-black text-xs text-black">{activeOrder.order_items?.[0]?.product_name || 'Nike Air Max'}</div>
+                    <div className="font-black text-xs text-black">{activeOrder.order_items?.[0]?.product_name || 'Item'}</div>
                     <div className="text-gray-500 font-mono text-[11px]">{getItemVariantLabel(activeOrder.order_items?.[0])}</div>
                     <div className="text-gray-400 font-mono text-[10px]">Qty: {activeOrder.order_items?.[0]?.quantity || 1}</div>
                   </div>
