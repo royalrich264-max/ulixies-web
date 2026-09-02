@@ -53,6 +53,12 @@ const ACTIVITY_PRESETS = {
   accessories: ['Training Bags & Backpacks', 'Performance Socks', 'Caps & Headwear', 'Gloves & Gym Straps']
 };
 
+const SIZE_PRESETS = {
+  shoes: ['5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12', '13', '14'],
+  clothing: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'],
+  accessories: ['ONE SIZE', 'S/M', 'L/XL']
+};
+
 export default function CrownAdminControlTower() {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
@@ -129,6 +135,8 @@ export default function CrownAdminControlTower() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
   const [selectedReturnDetails, setSelectedReturnDetails] = useState(null);
   const [editingProductModal, setEditingProductModal] = useState(null);
+  const [editingVariants, setEditingVariants] = useState([]);
+  const [editVariantSizeInput, setEditVariantSizeInput] = useState('');
 
   // Products Filter & 8-Step Wizard State
   const [selectedDept, setSelectedDept] = useState('all');
@@ -149,6 +157,7 @@ export default function CrownAdminControlTower() {
   const [wizUploading, setWizUploading] = useState(false);
   const [wizColors, setWizColors] = useState(['White', 'Black']);
   const [wizSizes, setWizSizes] = useState(['8.5', '9.5', '10', '10.5', '11']);
+  const [customSizeInput, setCustomSizeInput] = useState('');
   const [wizMatrix, setWizMatrix] = useState([]);
   const [bulkStockVal, setBulkStockVal] = useState('0');
   const [wizMaterials, setWizMaterials] = useState('Flyknit mesh, Zoom Air units');
@@ -356,13 +365,29 @@ export default function CrownAdminControlTower() {
     }
   };
 
+  const toggleWizSize = (size) => {
+    setWizSizes((prev) => prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]);
+  };
+
+  const handleAddCustomSize = () => {
+    const trimmed = customSizeInput.trim();
+    if (!trimmed) return;
+    if (!wizSizes.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
+      setWizSizes((prev) => [...prev, trimmed]);
+    }
+    setCustomSizeInput('');
+  };
+
   // Matrix Generator for Product Wizard
   useEffect(() => {
     const matrix = [];
     const baseSku = wizSku || (wizName ? wizName.substring(0, 4).toUpperCase() : 'ULX');
-    wizColors.forEach((color) => {
+    // No color selected shouldn't mean no sizes either — fall back to a single
+    // colorless row per size so a product with sizes but no color still publishes.
+    const colorsToUse = wizColors.length > 0 ? wizColors : [null];
+    colorsToUse.forEach((color) => {
       wizSizes.forEach((size) => {
-        const cCode = color.substring(0, 1).toUpperCase();
+        const cCode = color ? color.substring(0, 1).toUpperCase() : 'X';
         const existing = wizMatrix.find((m) => m.color === color && m.size === size);
         matrix.push({
           color,
@@ -573,9 +598,64 @@ export default function CrownAdminControlTower() {
     }
   };
 
+  const handleSetDepartmentHero = async (product) => {
+    try {
+      const makingHero = !product.is_best_seller;
+      if (makingHero) {
+        const { error: clearError } = await supabase
+          .from('products')
+          .update({ is_best_seller: false })
+          .eq('department', product.department)
+          .neq('id', product.id);
+        if (clearError) throw clearError;
+      }
+
+      const { error } = await supabase
+        .from('products')
+        .update({ is_best_seller: makingHero })
+        .eq('id', product.id);
+
+      if (error) throw error;
+      await refreshAll();
+    } catch (err) {
+      alert(`Hero update failed: ${err.message}`);
+    }
+  };
+
+  const openEditProduct = (p) => {
+    setEditingProductModal(p);
+    setEditingVariants((p.product_variants || []).map((v) => ({ ...v })));
+    setEditVariantSizeInput('');
+  };
+
+  const addEditVariantRow = () => {
+    const trimmed = editVariantSizeInput.trim();
+    if (!trimmed) return;
+    if (editingVariants.some((v) => (v.size || '').toLowerCase() === trimmed.toLowerCase())) {
+      setEditVariantSizeInput('');
+      return;
+    }
+    setEditingVariants((prev) => [...prev, { size: trimmed, color: prev[0]?.color || null, stock: 0 }]);
+    setEditVariantSizeInput('');
+  };
+
   const handleSaveEditedProduct = async (e) => {
     e.preventDefault();
     if (!editingProductModal) return;
+
+    // Catch duplicate size/color combos before hitting the database — same size
+    // listed twice (with the same color) throws a raw constraint error otherwise.
+    const seenVariantKeys = new Set();
+    for (const v of editingVariants) {
+      if (!v.size || !String(v.size).trim()) continue;
+      const key = `${String(v.size).trim().toLowerCase()}|${String(v.color || '').trim().toLowerCase()}`;
+      if (seenVariantKeys.has(key)) {
+        alert(`"${v.size}"${v.color ? ` in ${v.color}` : ''} is listed more than once in Sizes & Stock. Remove the duplicate row and save again.`);
+        return;
+      }
+      seenVariantKeys.add(key);
+    }
+
     try {
       const { error } = await supabase
         .from('products')
@@ -593,11 +673,41 @@ export default function CrownAdminControlTower() {
         .eq('id', editingProductModal.id);
 
       if (error) throw error;
+
+      // Sync sizes/variants: remove ones taken off the list, update the rest, insert new ones.
+      const originalIds = (editingProductModal.product_variants || []).map((v) => v.id);
+      const keptIds = editingVariants.filter((v) => v.id).map((v) => v.id);
+      const removedIds = originalIds.filter((id) => !keptIds.includes(id));
+
+      if (removedIds.length > 0) {
+        const { error: delErr } = await supabase.from('product_variants').delete().in('id', removedIds);
+        if (delErr) throw new Error(`Some sizes couldn't be removed (likely already used in an order): ${delErr.message}`);
+      }
+
+      for (const v of editingVariants) {
+        if (!v.size || !String(v.size).trim()) continue;
+        if (v.id) {
+          const { error: updErr } = await supabase
+            .from('product_variants')
+            .update({ size: v.size, color: v.color || null, stock: Number(v.stock) || 0 })
+            .eq('id', v.id);
+          if (updErr) throw updErr;
+        } else {
+          const { error: insErr } = await supabase
+            .from('product_variants')
+            .insert({ product_id: editingProductModal.id, size: v.size, color: v.color || null, stock: Number(v.stock) || 0 });
+          if (insErr) throw insErr;
+        }
+      }
+
       alert('Product updated successfully!');
       setEditingProductModal(null);
       await refreshAll();
     } catch (err) {
-      alert(`Update failed: ${err.message}`);
+      const friendly = /duplicate key value/i.test(err.message)
+        ? 'Two rows in Sizes & Stock have the same size and color. Remove the duplicate and save again.'
+        : err.message;
+      alert(`Update failed: ${friendly}`);
     }
   };
 
@@ -1083,6 +1193,10 @@ export default function CrownAdminControlTower() {
           {/* 2. PRODUCTS MASTER */}
           {activeTab === 'products' && (
             <div className="space-y-6 font-mono text-xs">
+              <div className="p-3.5 bg-lime-950/20 border border-lime-800/30 rounded-xl text-[11px] text-gray-300 flex items-center gap-2">
+                <Star className="w-3.5 h-3.5 text-[#CCFF00] shrink-0" fill="currentColor" />
+                Click the star next to a product to set it as that department's homepage hero image. Only one hero per department — setting a new one replaces the old.
+              </div>
               <div className="flex justify-between items-center">
                 <div className="flex gap-2">
                   {['all', 'men', 'women', 'kids', 'sports'].map(d => (
@@ -1126,7 +1240,12 @@ export default function CrownAdminControlTower() {
                             )}
                           </td>
                           <td className="p-4 font-sans">
-                            <div className="font-bold text-white text-sm">{p.name}</div>
+                            <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                              {p.name}
+                              {p.is_best_seller && (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] uppercase font-bold bg-[#CCFF00] text-black">Hero</span>
+                              )}
+                            </div>
                             <div className="font-mono text-[10px] text-gray-500">{p.sku || 'SKU-NONE'}</div>
                           </td>
                           <td className="p-4 uppercase text-gray-400">{p.department} // {p.primary_category}</td>
@@ -1149,7 +1268,14 @@ export default function CrownAdminControlTower() {
                             </span>
                           </td>
                           <td className="p-4 text-right space-x-2">
-                            <button onClick={() => setEditingProductModal(p)} className="p-1 text-gray-400 hover:text-white" title="Edit Article">
+                            <button
+                              onClick={() => handleSetDepartmentHero(p)}
+                              className={`p-1 ${p.is_best_seller ? 'text-[#CCFF00]' : 'text-gray-400 hover:text-white'}`}
+                              title={p.is_best_seller ? `Remove as ${p.department} homepage hero` : `Set as ${p.department} homepage hero`}
+                            >
+                              <Star className="w-4 h-4" fill={p.is_best_seller ? 'currentColor' : 'none'} />
+                            </button>
+                            <button onClick={() => openEditProduct(p)} className="p-1 text-gray-400 hover:text-white" title="Edit Article">
                               <Edit3 className="w-4 h-4" />
                             </button>
                             <button onClick={async () => { await duplicateProduct(p.id); refreshAll(); }} className="p-1 text-gray-400 hover:text-white" title="Duplicate">
@@ -1328,14 +1454,56 @@ export default function CrownAdminControlTower() {
               )}
 
               {wizardStep === 3 && (
-                <div className="space-y-4">
-                  <div className="text-gray-400 font-bold uppercase mb-2">Variant Colors & Sizes (Defaults stock to 0)</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {['White', 'Black', 'Red', 'Navy', 'Grey', 'Volt'].map(c => (
-                      <button key={c} type="button" onClick={() => setWizColors(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])} className={`px-3 py-1.5 rounded-lg border ${wizColors.includes(c) ? 'bg-[#CCFF00] text-black border-[#CCFF00] font-bold' : 'bg-black text-gray-400 border-white/10'}`}>
-                        {c}
+                <div className="space-y-6">
+                  <div>
+                    <div className="text-gray-400 font-bold uppercase mb-2">Variant Colors (Defaults stock to 0)</div>
+                    <div className="flex gap-2 flex-wrap">
+                      {['White', 'Black', 'Red', 'Navy', 'Grey', 'Volt'].map(c => (
+                        <button key={c} type="button" onClick={() => setWizColors(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])} className={`px-3 py-1.5 rounded-lg border ${wizColors.includes(c) ? 'bg-[#CCFF00] text-black border-[#CCFF00] font-bold' : 'bg-black text-gray-400 border-white/10'}`}>
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-gray-400 font-bold uppercase mb-2">
+                      Available Sizes — these are exactly what customers will be able to pick on the site
+                    </div>
+                    <div className="flex gap-2 flex-wrap mb-3">
+                      {(SIZE_PRESETS[wizPrimaryCat] || SIZE_PRESETS.shoes).map(sz => (
+                        <button key={sz} type="button" onClick={() => toggleWizSize(sz)} className={`px-3 py-1.5 rounded-lg border ${wizSizes.includes(sz) ? 'bg-[#CCFF00] text-black border-[#CCFF00] font-bold' : 'bg-black text-gray-400 border-white/10'}`}>
+                          {sz}
+                        </button>
+                      ))}
+                    </div>
+
+                    {wizSizes.some(s => !(SIZE_PRESETS[wizPrimaryCat] || SIZE_PRESETS.shoes).includes(s)) && (
+                      <div className="flex gap-2 flex-wrap mb-3">
+                        {wizSizes.filter(s => !(SIZE_PRESETS[wizPrimaryCat] || SIZE_PRESETS.shoes).includes(s)).map(sz => (
+                          <button key={sz} type="button" onClick={() => toggleWizSize(sz)} className="px-3 py-1.5 rounded-lg border bg-[#CCFF00] text-black border-[#CCFF00] font-bold flex items-center gap-1.5">
+                            {sz} <X className="w-3 h-3" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customSizeInput}
+                        onChange={(e) => setCustomSizeInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomSize(); } }}
+                        placeholder="Custom size (e.g. 3XL, EU 42, Kids 5Y)"
+                        className="flex-1 p-2.5 bg-black border border-white/10 rounded-lg text-white outline-none text-xs"
+                      />
+                      <button type="button" onClick={handleAddCustomSize} className="px-4 py-2 bg-white/10 border border-white/10 rounded-lg font-bold uppercase text-[10px]">
+                        Add Size
                       </button>
-                    ))}
+                    </div>
+                    {wizSizes.length === 0 && (
+                      <p className="text-red-400 text-[10px] mt-2">Select or add at least one size — no sizes means customers can't buy this item.</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -2677,6 +2845,75 @@ export default function CrownAdminControlTower() {
                     <option value="clothing">Clothes</option>
                     <option value="accessories">Accessories</option>
                   </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-gray-400 block mb-1 uppercase text-[10px]">
+                  Sizes & Stock — exactly what customers can pick on the site
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto border border-white/10 rounded-xl p-2 bg-black">
+                  {editingVariants.length === 0 && (
+                    <p className="text-gray-500 text-[10px] p-2">No sizes yet — this product can't be bought until you add at least one.</p>
+                  )}
+                  {editingVariants.map((v, idx) => (
+                    <div key={v.id || `new-${idx}`} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={v.size || ''}
+                        onChange={(e) => {
+                          const updated = [...editingVariants];
+                          updated[idx] = { ...updated[idx], size: e.target.value };
+                          setEditingVariants(updated);
+                        }}
+                        placeholder="Size"
+                        className="w-20 p-2 bg-[#141414] border border-white/10 rounded-lg text-white outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={v.color || ''}
+                        onChange={(e) => {
+                          const updated = [...editingVariants];
+                          updated[idx] = { ...updated[idx], color: e.target.value };
+                          setEditingVariants(updated);
+                        }}
+                        placeholder="Color (optional)"
+                        className="flex-1 p-2 bg-[#141414] border border-white/10 rounded-lg text-white outline-none"
+                      />
+                      <input
+                        type="number"
+                        value={v.stock ?? 0}
+                        onChange={(e) => {
+                          const updated = [...editingVariants];
+                          updated[idx] = { ...updated[idx], stock: e.target.value };
+                          setEditingVariants(updated);
+                        }}
+                        placeholder="Stock"
+                        className="w-16 p-2 bg-[#141414] border border-white/10 rounded-lg text-white outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditingVariants(editingVariants.filter((_, i) => i !== idx))}
+                        className="p-1.5 text-gray-400 hover:text-red-400"
+                        title="Remove this size"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={editVariantSizeInput}
+                    onChange={(e) => setEditVariantSizeInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEditVariantRow(); } }}
+                    placeholder="Add size (e.g. 10, L, ONE SIZE)"
+                    className="flex-1 p-2.5 bg-black border border-white/10 rounded-lg text-white outline-none"
+                  />
+                  <button type="button" onClick={addEditVariantRow} className="px-4 py-2 bg-white/10 border border-white/10 rounded-lg font-bold uppercase text-[10px]">
+                    Add
+                  </button>
                 </div>
               </div>
 

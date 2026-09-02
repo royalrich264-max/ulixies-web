@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
-import { getCart, createOrder, getCurrentUser, getStoreSettings, validateCoupon, recordCouponUsage } from '@/services/storeService';
+import { getCart, createOrder, clearCart, markOrderPaymentFailed, getCurrentUser, getStoreSettings, validateCoupon, recordCouponUsage } from '@/services/storeService';
 import { Lock, CreditCard, ShieldCheck, Tag, X, Check } from 'lucide-react';
 
 const SUPABASE_INTENT_URL =
@@ -20,6 +20,7 @@ export default function CheckoutPage() {
   const [activeOrderNumber, setActiveOrderNumber] = useState(null);
   const [elements, setElements] = useState(null);
   const cardElementMountRef = useRef(null);
+  const orderCreationRef = useRef(null);
   const router = useRouter();
 
   const [form, setForm] = useState({
@@ -144,6 +145,15 @@ export default function CheckoutPage() {
             setCanMakeGooglePay(true);
 
             pr.on('paymentmethod', async (ev) => {
+              let order;
+              try {
+                order = await ensureOrderCreated();
+              } catch (err) {
+                ev.complete('fail');
+                alert(`Order creation failed: ${err.message}`);
+                return;
+              }
+
               const { paymentIntent, error: confirmError } = await stripe.confirmCardPayment(
                 intentData.clientSecret,
                 { payment_method: ev.paymentMethod.id },
@@ -152,13 +162,14 @@ export default function CheckoutPage() {
 
               if (confirmError) {
                 ev.complete('fail');
+                await markOrderPaymentFailed(order.id);
                 alert(`Payment Failed: ${confirmError.message}`);
               } else {
                 ev.complete('success');
                 if (paymentIntent.status === 'requires_action') {
                   await stripe.confirmCardPayment(intentData.clientSecret);
                 }
-                await handleOrderSuccess(generatedOrderNumber, 'Google Pay');
+                await handleOrderSuccess(order);
               }
             });
           }
@@ -182,33 +193,43 @@ export default function CheckoutPage() {
     }
   }, [elements]);
 
-  const handleOrderSuccess = async (orderNum, method) => {
+  // Creates the order (once) before payment is confirmed, so it exists no matter what
+  // happens next — Stripe's webhook needs a real order row to update, and can fire before
+  // the browser gets a chance to do anything post-payment.
+  const ensureOrderCreated = async () => {
+    if (orderCreationRef.current) return orderCreationRef.current;
+    orderCreationRef.current = createOrder({
+      order_number: activeOrderNumber,
+      customer: {
+        recipient_name: form.name,
+        email: form.email,
+        street: form.address,
+        city: form.city,
+        postal_code: form.postalCode
+      },
+      items: itemsList,
+      total: finalTotal,
+      subtotal: displaySubtotal,
+      shippingCost: shippingCost,
+      shippingSpeed: form.shippingSpeed === 'express' ? 'Express Delivery' : 'Standard Delivery',
+      discountAmount
+    }).catch((err) => {
+      orderCreationRef.current = null;
+      throw err;
+    });
+    return orderCreationRef.current;
+  };
+
+  const handleOrderSuccess = async (order) => {
     setSubmitting(true);
     try {
-      const order = await createOrder({
-        order_number: orderNum,
-        customer: {
-          recipient_name: form.name,
-          email: form.email,
-          street: form.address,
-          city: form.city,
-          postal_code: form.postalCode
-        },
-        items: itemsList,
-        total: finalTotal,
-        subtotal: displaySubtotal,
-        shippingCost: shippingCost,
-        shippingSpeed: form.shippingSpeed === 'express' ? 'Express Delivery' : 'Standard Delivery',
-        discountAmount
-      });
-
       if (appliedCoupon?.coupon?.id && order?.id) {
         await recordCouponUsage(appliedCoupon.coupon.id, order.id);
       }
-
+      if (cart?.id) await clearCart(cart.id);
       router.push('/orders');
     } catch (err) {
-      alert(`Order saving failed: ${err.message}`);
+      alert(`Order finalize failed: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -220,6 +241,8 @@ export default function CheckoutPage() {
 
     setSubmitting(true);
     try {
+      const order = await ensureOrderCreated();
+
       const { error, paymentIntent } = await stripeObj.confirmPayment({
         elements,
         confirmParams: {
@@ -231,8 +254,9 @@ export default function CheckoutPage() {
 
       if (error) {
         alert(error.message);
+        await markOrderPaymentFailed(order.id);
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-        await handleOrderSuccess(activeOrderNumber, 'Card');
+        await handleOrderSuccess(order);
       }
     } catch (err) {
       alert(`Checkout failed: ${err.message}`);

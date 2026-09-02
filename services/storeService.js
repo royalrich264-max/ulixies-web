@@ -408,6 +408,14 @@ export async function createFullAdminProduct(productData) {
 
   if (prodErr) throw prodErr;
 
+  if (is_best_seller) {
+    await supabase
+      .from('products')
+      .update({ is_best_seller: false })
+      .eq('department', product.department)
+      .neq('id', product.id);
+  }
+
   if (images && images.length > 0) {
     const imagesToInsert = images.map((img, index) => ({
       product_id: product.id,
@@ -1106,9 +1114,9 @@ export async function clearCart(cartId) {
 }
 
 // ================= ORDERS =================
-export async function createOrder({ customer, items, total, subtotal, shippingCost, shippingSpeed, discountAmount = 0 }) {
+export async function createOrder({ order_number, customer, items, total, subtotal, shippingCost, shippingSpeed, discountAmount = 0 }) {
   const user = await getCurrentUser();
-  const orderNumber = 'ULX-' + Math.floor(100000 + Math.random() * 900000);
+  const orderNumber = order_number || ('ULX-' + Math.floor(100000 + Math.random() * 900000));
   const parsedTotal = Number(total);
 
   const { data: order, error: orderErr } = await supabase
@@ -1124,7 +1132,8 @@ export async function createOrder({ customer, items, total, subtotal, shippingCo
       shipping_cost: Number(shippingCost),
       shipping_speed: shippingSpeed,
       shipping_address: customer,
-      status: 'processing'
+      status: 'pending',
+      payment_status: 'pending'
     })
     .select()
     .single();
@@ -1152,10 +1161,15 @@ export async function createOrder({ customer, items, total, subtotal, shippingCo
     if (itemsErr) throw new Error(itemsErr.message);
   }
 
-  const cartId = getLocalCartId();
-  if (cartId) await clearCart(cartId);
-
   return order;
+}
+
+export async function markOrderPaymentFailed(orderId) {
+  const { error } = await supabase
+    .from('orders')
+    .update({ payment_status: 'failed' })
+    .eq('id', orderId);
+  if (error) console.error('markOrderPaymentFailed error:', error);
 }
 
 const ORDER_ITEMS_WITH_IMAGE = `

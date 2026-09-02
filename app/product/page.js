@@ -9,6 +9,7 @@ function ProductDetailContent() {
   const searchParams = useSearchParams();
   const slug = searchParams.get('slug');
   const [product, setProduct] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [adding, setAdding] = useState(false);
@@ -17,8 +18,10 @@ function ProductDetailContent() {
     if (slug) {
       getProductBySlug(slug).then((p) => {
         setProduct(p);
-        if (p?.product_variants?.length > 0) {
-          setSelectedVariant(p.product_variants[0]);
+        const variants = p?.product_variants || [];
+        if (variants.length > 0) {
+          setSelectedColor(variants[0].color || null);
+          setSelectedVariant(variants[0]);
         }
       });
     }
@@ -42,6 +45,17 @@ function ProductDetailContent() {
 
   const productImage = product.product_images?.[0]?.url;
   const displayPrice = selectedVariant?.price_override ?? product.sale_price ?? product.base_price;
+
+  const variants = product.product_variants || [];
+  const availableColors = [...new Set(variants.map((v) => v.color).filter(Boolean))];
+  const hasColors = availableColors.length > 0;
+  const sizesForColor = hasColors ? variants.filter((v) => v.color === selectedColor) : variants;
+
+  const handleSelectColor = (color) => {
+    setSelectedColor(color);
+    const firstForColor = variants.find((v) => v.color === color);
+    if (firstForColor) setSelectedVariant(firstForColor);
+  };
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
@@ -71,21 +85,47 @@ function ProductDetailContent() {
           <p className="text-sm text-gray-600 mt-4 leading-relaxed">{product.description}</p>
         )}
 
-        {product.product_variants?.length > 0 && (
+        {hasColors && (
+          <div className="mt-6">
+            <span className="text-xs font-bold uppercase block mb-2">
+              Select Color {selectedColor ? `— ${selectedColor}` : ''}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {availableColors.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => handleSelectColor(color)}
+                  className={`px-4 py-2 text-xs font-bold border rounded ${
+                    selectedColor === color ? 'bg-black text-white border-black' : 'bg-white hover:border-black'
+                  }`}
+                >
+                  {color}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {sizesForColor.length > 0 && (
           <div className="mt-6">
             <span className="text-xs font-bold uppercase block mb-2">Select Size</span>
             <div className="grid grid-cols-4 gap-2">
-              {product.product_variants.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => setSelectedVariant(v)}
-                  className={`py-3 text-xs font-bold border rounded ${
-                    selectedVariant?.id === v.id ? 'bg-black text-white border-black' : 'bg-white hover:border-black'
-                  }`}
-                >
-                  {v.size || 'OS'}
-                </button>
-              ))}
+              {sizesForColor.map((v) => {
+                const outOfStock = v.stock !== undefined && v.stock !== null && v.stock <= 0;
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => setSelectedVariant(v)}
+                    disabled={outOfStock}
+                    className={`py-3 text-xs font-bold border rounded disabled:opacity-30 disabled:cursor-not-allowed ${
+                      selectedVariant?.id === v.id ? 'bg-black text-white border-black' : 'bg-white hover:border-black'
+                    }`}
+                    title={outOfStock ? 'Out of stock' : undefined}
+                  >
+                    {v.size || 'OS'}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

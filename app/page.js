@@ -215,6 +215,7 @@ function HomeContent() {
   const [products, setProducts] = useState([]);
   const [heroProduct, setHeroProduct] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null);
   
   const [heroQuantity, setHeroQuantity] = useState(1);
 
@@ -224,6 +225,7 @@ function HomeContent() {
   const [wishlistIds, setWishlistIds] = useState([]);
   const [cmsContent, setCmsContent] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [openSizePickerId, setOpenSizePickerId] = useState(null);
 
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
@@ -243,10 +245,15 @@ function HomeContent() {
         const featured = liveProducts.find((p) => p.is_best_seller || p.is_featured) || liveProducts[0];
         setHeroProduct(featured);
         if (featured.product_variants && featured.product_variants.length > 0) {
+          setSelectedColor(featured.product_variants[0].color || null);
           setSelectedVariant(featured.product_variants[0]);
+        } else {
+          setSelectedColor(null);
+          setSelectedVariant(null);
         }
       } else {
         setHeroProduct(null);
+        setSelectedColor(null);
         setSelectedVariant(null);
       }
 
@@ -340,6 +347,13 @@ function HomeContent() {
     setWishlistIds(updated.map((u) => u.id));
   };
 
+  const handleQuickAdd = async (product, variantId) => {
+    const { id: cartId } = await getCart();
+    await addToCart(cartId, variantId, 1, product.id);
+    setOpenSizePickerId(null);
+    window.location.reload();
+  };
+
   const handleAddHeroToBag = async () => {
     if (!heroProduct) return;
     setLoadingAdd(true);
@@ -402,6 +416,54 @@ function HomeContent() {
 
   const heroHasDiscount = heroProduct?.sale_price && Number(heroProduct.sale_price) < Number(heroProduct.base_price);
   const heroDiscountPct = heroHasDiscount ? Math.round(((heroProduct.base_price - heroProduct.sale_price) / heroProduct.base_price) * 100) : null;
+
+  const heroVariants = heroProduct?.product_variants || [];
+  const heroColors = [...new Set(heroVariants.map((v) => v.color).filter(Boolean))];
+  const hasHeroColors = heroColors.length > 0;
+  const heroSizesForColor = hasHeroColors ? heroVariants.filter((v) => v.color === selectedColor) : heroVariants;
+
+  const handleSelectHeroColor = (color) => {
+    setSelectedColor(color);
+    const firstForColor = heroVariants.find((v) => v.color === color);
+    if (firstForColor) setSelectedVariant(firstForColor);
+  };
+
+  const renderDivisionGrid = (deptKey, deptProducts) => (
+    <div className="space-y-8">
+      {[
+        { key: 'shoes', label: 'Shoes' },
+        { key: 'clothing', label: 'Clothing' },
+        { key: 'accessories', label: 'Accessories' },
+      ].map((division) => {
+        const divisionProducts = deptProducts.filter((p) => p.primary_category === division.key);
+        if (divisionProducts.length === 0) return null;
+        const groupKey = `${deptKey}-${division.key}`;
+        const isExpanded = !!expandedGroups[groupKey];
+        const visibleProducts = isExpanded ? divisionProducts : divisionProducts.slice(0, 5);
+        return (
+          <div key={division.key}>
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                {deptKey} {division.label}
+              </h4>
+              <span className="text-[10px] font-mono text-gray-400">{divisionProducts.length} ITEMS</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              {visibleProducts.map((p) => renderProductCard(p, wishlistIds, handleToggleHeart, openSizePickerId, setOpenSizePickerId, handleQuickAdd))}
+            </div>
+            {divisionProducts.length > 5 && (
+              <button
+                onClick={() => setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))}
+                className="mt-3 text-xs font-bold uppercase tracking-wider text-black underline hover:text-gray-600 cursor-pointer"
+              >
+                {isExpanded ? 'Show Less' : `View All ${divisionProducts.length} ${division.label}`}
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="bg-white min-h-screen text-[#111111]">
@@ -595,7 +657,30 @@ function HomeContent() {
                 </div>
               </div>
 
-              {heroProduct.product_variants?.length > 0 && (
+              {hasHeroColors && (
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-black block mb-2">
+                    Select Color {selectedColor ? `— ${selectedColor}` : ''}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {heroColors.map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => handleSelectHeroColor(color)}
+                        className={`px-4 py-2 rounded border text-xs font-semibold transition-colors cursor-pointer ${
+                          selectedColor === color
+                            ? 'border-2 border-black bg-black text-white'
+                            : 'border-[#E5E5E5] hover:border-black text-black'
+                        }`}
+                      >
+                        {color}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {heroSizesForColor.length > 0 && (
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-black">Select Size</label>
@@ -604,19 +689,24 @@ function HomeContent() {
                     </span>
                   </div>
                   <div className="grid grid-cols-4 gap-2">
-                    {heroProduct.product_variants.map((v) => (
-                      <button
-                        key={v.id}
-                        onClick={() => setSelectedVariant(v)}
-                        className={`py-3 rounded border text-xs font-semibold transition-colors cursor-pointer ${
-                          selectedVariant?.id === v.id
-                            ? 'border-2 border-black bg-black text-white'
-                            : 'border-[#E5E5E5] hover:border-black text-black'
-                        }`}
-                      >
-                        {v.size || 'OS'}
-                      </button>
-                    ))}
+                    {heroSizesForColor.map((v) => {
+                      const outOfStock = v.stock !== undefined && v.stock !== null && v.stock <= 0;
+                      return (
+                        <button
+                          key={v.id}
+                          onClick={() => setSelectedVariant(v)}
+                          disabled={outOfStock}
+                          title={outOfStock ? 'Out of stock' : undefined}
+                          className={`py-3 rounded border text-xs font-semibold transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+                            selectedVariant?.id === v.id
+                              ? 'border-2 border-black bg-black text-white'
+                              : 'border-[#E5E5E5] hover:border-black text-black'
+                          }`}
+                        >
+                          {v.size || 'OS'}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -760,47 +850,16 @@ function HomeContent() {
                         <h3 className="text-lg font-black uppercase tracking-tight text-black">{deptKey}</h3>
                         <span className="text-xs font-mono font-bold text-gray-500">{deptProducts.length} ITEMS</span>
                       </div>
-                      <div className="space-y-8">
-                        {[
-                          { key: 'shoes', label: 'Shoes' },
-                          { key: 'clothing', label: 'Clothing' },
-                          { key: 'accessories', label: 'Accessories' },
-                        ].map((division) => {
-                          const divisionProducts = deptProducts.filter((p) => p.primary_category === division.key);
-                          if (divisionProducts.length === 0) return null;
-                          const groupKey = `${deptKey}-${division.key}`;
-                          const isExpanded = !!expandedGroups[groupKey];
-                          const visibleProducts = isExpanded ? divisionProducts : divisionProducts.slice(0, 5);
-                          return (
-                            <div key={division.key}>
-                              <div className="flex justify-between items-center mb-3">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                                  {deptKey} {division.label}
-                                </h4>
-                                <span className="text-[10px] font-mono text-gray-400">{divisionProducts.length} ITEMS</span>
-                              </div>
-                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                                {visibleProducts.map((p) => renderProductCard(p, wishlistIds, handleToggleHeart))}
-                              </div>
-                              {divisionProducts.length > 5 && (
-                                <button
-                                  onClick={() => setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))}
-                                  className="mt-3 text-xs font-bold uppercase tracking-wider text-black underline hover:text-gray-600 cursor-pointer"
-                                >
-                                  {isExpanded ? 'Show Less' : `View All ${divisionProducts.length} ${division.label}`}
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                      {renderDivisionGrid(deptKey, deptProducts)}
                     </div>
                   );
                 })}
               </div>
+            ) : activeSub === 'all' ? (
+              renderDivisionGrid(activeDept, displayedProducts)
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {displayedProducts.map((p) => renderProductCard(p, wishlistIds, handleToggleHeart))}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                {displayedProducts.map((p) => renderProductCard(p, wishlistIds, handleToggleHeart, openSizePickerId, setOpenSizePickerId, handleQuickAdd))}
               </div>
             )}
           </div>
@@ -812,17 +871,20 @@ function HomeContent() {
   );
 }
 
-function renderProductCard(p, wishlistIds, handleToggleHeart) {
+function renderProductCard(p, wishlistIds, handleToggleHeart, openSizePickerId, onToggleSizePicker, onQuickAdd) {
   const isLiked = wishlistIds.includes(p.id);
   const mainImg = p.product_images?.[0]?.url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=700&q=80';
-  
+
   // Real dynamic sale detection
   const hasDiscount = p.sale_price && Number(p.sale_price) < Number(p.base_price);
-  const discountPct = hasDiscount 
-    ? Math.round(((Number(p.base_price) - Number(p.sale_price)) / Number(p.base_price)) * 100) 
+  const discountPct = hasDiscount
+    ? Math.round(((Number(p.base_price) - Number(p.sale_price)) / Number(p.base_price)) * 100)
     : null;
 
   const currentPrice = hasDiscount ? p.sale_price : p.base_price;
+  const variants = p.product_variants || [];
+  const needsSizePick = variants.length > 1;
+  const isPickerOpen = openSizePickerId === p.id;
 
   return (
     <div key={p.id} className="group flex flex-col justify-between">
@@ -870,18 +932,50 @@ function renderProductCard(p, wishlistIds, handleToggleHeart) {
               <span className="text-xs text-gray-400 line-through font-mono">${p.base_price}</span>
             )}
           </div>
-          <button 
-            onClick={async () => {
-              const { id: cartId } = await getCart();
-              await addToCart(cartId, null, 1, p.id);
-              window.location.reload();
-            }}
-            className="p-2 bg-[#F5F5F5] hover:bg-[#E5E5E5] rounded-full transition-colors cursor-pointer"
-            title="Add 1 to bag"
-          >
-            <Plus className="w-4 h-4 text-black" />
-          </button>
+          {!isPickerOpen && (
+            <button
+              onClick={() => {
+                if (needsSizePick) {
+                  onToggleSizePicker(p.id);
+                } else {
+                  onQuickAdd(p, variants[0]?.id || null);
+                }
+              }}
+              className="p-2 bg-[#F5F5F5] hover:bg-[#E5E5E5] rounded-full transition-colors cursor-pointer"
+              title={needsSizePick ? 'Choose a size' : 'Add 1 to bag'}
+            >
+              <Plus className="w-4 h-4 text-black" />
+            </button>
+          )}
         </div>
+
+        {isPickerOpen && (
+          <div className="mt-2 p-2.5 bg-white border border-[#E5E5E5] rounded-xl">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[9px] font-bold uppercase text-gray-500">Select Size</span>
+              <button
+                type="button"
+                onClick={() => onToggleSizePicker(null)}
+                className="text-[9px] font-bold text-gray-400 hover:text-black cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {variants.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => onQuickAdd(p, v.id)}
+                  disabled={v.stock !== undefined && v.stock <= 0}
+                  className="px-2.5 py-1 text-[10px] font-bold border border-[#E5E5E5] rounded hover:border-black hover:bg-black hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black cursor-pointer"
+                >
+                  {v.size || 'OS'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
