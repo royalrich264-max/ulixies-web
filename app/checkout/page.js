@@ -21,6 +21,8 @@ export default function CheckoutPage() {
   const [elements, setElements] = useState(null);
   const cardElementMountRef = useRef(null);
   const orderCreationRef = useRef(null);
+  const paymentIntentIdRef = useRef(null);
+  const skipFirstAmountSyncRef = useRef(true);
   const router = useRouter();
 
   const [form, setForm] = useState({
@@ -78,7 +80,9 @@ export default function CheckoutPage() {
     setCouponMessage('');
   };
 
-  // 1. Initial Load: Load Cart & Fetch Dynamic Stripe Session from Supabase Secrets
+  // 1. Initial Load: Load Cart & create the Stripe PaymentIntent — runs once on mount.
+  // The amount is computed here from freshly-fetched cart/shipping data, not from the
+  // component's `finalTotal`, which still reflects the previous render at this point.
   useEffect(() => {
     async function initCheckout() {
       try {
@@ -86,10 +90,15 @@ export default function CheckoutPage() {
         setCart(data || { items: [] });
 
         const savedShippingRules = await getStoreSettings('shipping_rules');
-        if (savedShippingRules) setShippingRules((prev) => ({ ...prev, ...savedShippingRules }));
+        const effectiveShippingRules = savedShippingRules
+          ? { ...shippingRules, ...savedShippingRules }
+          : shippingRules;
+        setShippingRules(effectiveShippingRules);
 
         const user = await getCurrentUser();
+        let effectiveEmail = form.email;
         if (user) {
+          effectiveEmail = user.email || form.email;
           setForm((prev) => ({
             ...prev,
             email: user.email || prev.email,
@@ -100,21 +109,36 @@ export default function CheckoutPage() {
         const generatedOrderNumber = `ULX-${Date.now().toString().slice(-6)}`;
         setActiveOrderNumber(generatedOrderNumber);
 
+        const items = data?.items || [];
+        const rawSubtotal = items.reduce((acc, item) => {
+          const price = item.product_variants?.price_override
+            ?? item.product_variants?.products?.sale_price
+            ?? item.product_variants?.products?.base_price
+            ?? 0;
+          return acc + price * item.quantity;
+        }, 0);
+        const openingSubtotal = rawSubtotal > 0 ? rawSubtotal : 165.0;
+        const openingShipping = form.shippingSpeed === 'express'
+          ? Number(effectiveShippingRules.express_rate) || 0
+          : (openingSubtotal >= Number(effectiveShippingRules.free_threshold || 0) ? 0 : Number(effectiveShippingRules.standard_rate) || 0);
+        const openingTotal = Math.max(0, openingSubtotal + openingShipping);
+
         // Fetch intent & publishableKey dynamically from Supabase Secrets
         const res = await fetch(SUPABASE_INTENT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            amount: finalTotal,
+            amount: openingTotal,
             currency: 'usd',
             order_number: generatedOrderNumber,
-            customer_email: form.email
+            customer_email: effectiveEmail
           })
         });
 
         const intentData = await res.json();
         if (intentData.error) throw new Error(intentData.error);
 
+        paymentIntentIdRef.current = intentData.paymentIntentId;
         setClientSecret(intentData.clientSecret);
 
         // Initialize Stripe instance with the publishable key returned from backend
@@ -132,7 +156,7 @@ export default function CheckoutPage() {
             currency: 'usd',
             total: {
               label: 'ULIXIES ATHLETE CORP',
-              amount: Math.round(finalTotal * 100),
+              amount: Math.round(openingTotal * 100),
             },
             requestPayerName: true,
             requestPayerEmail: true,
@@ -182,6 +206,42 @@ export default function CheckoutPage() {
     }
 
     initCheckout();
+  }, []);
+
+  // 2. Keep the existing PaymentIntent's amount in sync when shipping speed or a coupon
+  // changes the total after the initial load. Updates the same PaymentIntent in place
+  // (via the edge function) instead of creating a new one — creating a new one each time
+  // orphaned the old intent, forced Payment Element to remount (wiping anything typed),
+  // and risked confirming a stale amount if an old clientSecret was still in play.
+  useEffect(() => {
+    if (skipFirstAmountSyncRef.current) {
+      skipFirstAmountSyncRef.current = false;
+      return;
+    }
+    if (!paymentIntentIdRef.current) return;
+
+    const syncAmount = async () => {
+      try {
+        const res = await fetch(SUPABASE_INTENT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: finalTotal,
+            currency: 'usd',
+            paymentIntentId: paymentIntentIdRef.current
+          })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (elements?.fetchUpdates) {
+          await elements.fetchUpdates();
+        }
+      } catch (err) {
+        console.error('Failed to sync payment amount:', err);
+      }
+    };
+
+    syncAmount();
   }, [finalTotal]);
 
   // Mount Stripe Card Payment Element when elements is ready
