@@ -484,6 +484,95 @@ export async function deleteProduct(productId) {
   }
 }
 
+// ================= COLLECTIONS / DROPS =================
+export async function getCollectionProductIds(collectionId) {
+  const { data, error } = await supabase
+    .from('collection_products')
+    .select('product_id')
+    .eq('collection_id', collectionId);
+  if (error) throw error;
+  return (data || []).map((r) => r.product_id);
+}
+
+export async function addProductToCollection(collectionId, productId) {
+  const { error } = await supabase
+    .from('collection_products')
+    .insert({ collection_id: collectionId, product_id: productId });
+  if (error) throw error;
+}
+
+export async function removeProductFromCollection(collectionId, productId) {
+  const { error } = await supabase
+    .from('collection_products')
+    .delete()
+    .eq('collection_id', collectionId)
+    .eq('product_id', productId);
+  if (error) throw error;
+}
+
+export async function getPublishedCollections() {
+  const { data, error } = await supabase
+    .from('collections')
+    .select('id, name, slug, description, collection_products(product_id, products(id, product_images(url, sort_order)))')
+    .eq('is_published', true)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('getPublishedCollections error:', error);
+    return [];
+  }
+  return (data || []).filter((c) => (c.collection_products || []).length > 0);
+}
+
+export async function getCollectionBySlug(slug) {
+  const { data: collection, error } = await supabase
+    .from('collections')
+    .select('id, name, slug, description')
+    .eq('slug', slug)
+    .eq('is_published', true)
+    .maybeSingle();
+  if (error || !collection) return null;
+
+  const productIds = await getCollectionProductIds(collection.id);
+  if (productIds.length === 0) return { ...collection, products: [] };
+
+  const { data: products } = await supabase
+    .from('products')
+    .select('*, brands(name), product_images(url, sort_order, view_angle, alt_text)')
+    .in('id', productIds)
+    .eq('status', 'active');
+
+  return { ...collection, products: products || [] };
+}
+
+// ================= ACTIVITY DIVISIONS =================
+export async function getActivityDivisions() {
+  const { data, error } = await supabase
+    .from('activity_divisions')
+    .select('*')
+    .order('primary_category', { ascending: true })
+    .order('sort_order', { ascending: true });
+  if (error) {
+    console.error('getActivityDivisions error:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function createActivityDivision(primary_category, name) {
+  const { data, error } = await supabase
+    .from('activity_divisions')
+    .insert({ primary_category, name: name.trim() })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteActivityDivision(id) {
+  const { error } = await supabase.from('activity_divisions').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function duplicateProduct(productId) {
   const { data: original, error } = await supabase
     .from('products')
@@ -508,7 +597,7 @@ export async function getInventoryVariants() {
     .from('product_variants')
     .select(`
       *,
-      products ( id, name, sku, base_price, sale_price, department, primary_category, product_images ( url ) )
+      products ( id, name, sku, base_price, sale_price, department, primary_category, subcategory, product_images ( url ) )
     `)
     .order('stock', { ascending: true });
 
@@ -552,7 +641,7 @@ export async function getInventoryLogs() {
         color,
         size,
         sku,
-        products ( name )
+        products ( name, department, primary_category, subcategory )
       )
     `)
     .order('created_at', { ascending: false })
@@ -629,7 +718,7 @@ export async function getAllReturns() {
 export async function updateReturnStatus(returnId, status, notes = '') {
   const { data, error } = await supabase
     .from('returns')
-    .update({ status, notes })
+    .update({ status, inspection_notes: notes })
     .eq('id', returnId)
     .select()
     .single();
@@ -643,6 +732,7 @@ export async function submitProductReturn({
   order_number,
   customer_name,
   customer_email,
+  customer_phone = null,
   product_name,
   variant_size,
   quantity = 1,
@@ -660,6 +750,7 @@ export async function submitProductReturn({
       order_number,
       customer_name,
       customer_email,
+      customer_phone,
       product_name,
       variant_size,
       quantity,

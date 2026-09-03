@@ -11,6 +11,7 @@ import {
   getWishlist,
   getStoreContent,
   getStoreSettings,
+  getActivityDivisions,
   signOutUser
 } from '@/services/storeService';
 import {
@@ -28,12 +29,6 @@ import {
   ImageOff
 } from 'lucide-react';
 
-const DIVISION_ACTIVITIES = {
-  shoes: ['Gym & Training', 'Running', 'Lifestyle / Everyday', 'Basketball', 'Football / Soccer', 'Trail & Outdoor'],
-  clothing: ['Gym & Workout Shirts', 'Hoodies & Sweatshirts', 'Training Shorts', 'Track Pants & Tights', 'Jackets & Outerwear', 'Everyday Casual'],
-  accessories: ['Training Bags & Backpacks', 'Performance Socks', 'Caps & Headwear', 'Gloves & Gym Straps'],
-};
-
 export default function RootLayout({ children }) {
   const router = useRouter();
   const [cartCount, setCartCount] = useState(0);
@@ -42,6 +37,7 @@ export default function RootLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hoveredDept, setHoveredDept] = useState(null);
   const [deptData, setDeptData] = useState({});
+  const [divisionActivities, setDivisionActivities] = useState({ shoes: [], clothing: [], accessories: [] });
   const [announcementBar, setAnnouncementBar] = useState('');
   const [siteSettings, setSiteSettings] = useState({ store_name: 'ULIXIES RESELLER CORP', contact_email: '', phone: '' });
 
@@ -92,6 +88,13 @@ export default function RootLayout({ children }) {
         });
 
         setDeptData(compiled);
+
+        const divisions = await getActivityDivisions();
+        setDivisionActivities({
+          shoes: divisions.filter(d => d.primary_category === 'shoes').map(d => d.name),
+          clothing: divisions.filter(d => d.primary_category === 'clothing').map(d => d.name),
+          accessories: divisions.filter(d => d.primary_category === 'accessories').map(d => d.name),
+        });
       } catch (e) {
         console.error('Header data load error:', e);
       }
@@ -259,7 +262,7 @@ export default function RootLayout({ children }) {
                   <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Shoes</h4>
                   <div className="flex flex-col gap-2.5 text-[13px] font-medium">
                     <Link href={`/?${megaDeptQuery}sub=shoes`} className="text-gray-500 hover:text-black hover:underline w-fit">All Shoes</Link>
-                    {DIVISION_ACTIVITIES.shoes.map((act) => (
+                    {divisionActivities.shoes.map((act) => (
                       <Link key={act} href={`/?${megaDeptQuery}sub=shoes&activity=${encodeURIComponent(act)}`} className="text-gray-500 hover:text-black hover:underline w-fit">
                         {act}
                       </Link>
@@ -271,7 +274,7 @@ export default function RootLayout({ children }) {
                   <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Clothing</h4>
                   <div className="flex flex-col gap-2.5 text-[13px] font-medium">
                     <Link href={`/?${megaDeptQuery}sub=clothes`} className="text-gray-500 hover:text-black hover:underline w-fit">All Clothing</Link>
-                    {DIVISION_ACTIVITIES.clothing.map((act) => (
+                    {divisionActivities.clothing.map((act) => (
                       <Link key={act} href={`/?${megaDeptQuery}sub=clothes&activity=${encodeURIComponent(act)}`} className="text-gray-500 hover:text-black hover:underline w-fit">
                         {act}
                       </Link>
@@ -283,7 +286,7 @@ export default function RootLayout({ children }) {
                   <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Accessories</h4>
                   <div className="flex flex-col gap-2.5 text-[13px] font-medium">
                     <Link href={`/?${megaDeptQuery}sub=accessories`} className="text-gray-500 hover:text-black hover:underline w-fit">All Accessories</Link>
-                    {DIVISION_ACTIVITIES.accessories.map((act) => (
+                    {divisionActivities.accessories.map((act) => (
                       <Link key={act} href={`/?${megaDeptQuery}sub=accessories&activity=${encodeURIComponent(act)}`} className="text-gray-500 hover:text-black hover:underline w-fit">
                         {act}
                       </Link>

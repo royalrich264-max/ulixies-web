@@ -10,7 +10,9 @@ import {
   addToCart,
   getWishlist,
   toggleWishlistItem,
-  getStoreContent
+  getStoreContent,
+  getPublishedCollections,
+  getActivityDivisions
 } from '@/services/storeService';
 import { 
   Plus, 
@@ -196,11 +198,7 @@ const HERO_BANNER_CONFIG = {
   }
 };
 
-const ACTIVITY_PRESETS = {
-  shoes: ['Gym & Training', 'Running', 'Lifestyle / Everyday', 'Basketball', 'Football / Soccer', 'Trail & Outdoor'],
-  clothes: ['Gym & Workout Shirts', 'Hoodies & Sweatshirts', 'Training Shorts', 'Track Pants & Tights', 'Jackets & Outerwear', 'Everyday Casual'],
-  accessories: ['Training Bags & Backpacks', 'Performance Socks', 'Caps & Headwear', 'Gloves & Gym Straps']
-};
+const SUB_TO_PRIMARY_CATEGORY = { shoes: 'shoes', clothes: 'clothing', accessories: 'accessories' };
 
 function HomeContent() {
   const router = useRouter();
@@ -227,6 +225,8 @@ function HomeContent() {
   const [cmsContent, setCmsContent] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [openSizePickerId, setOpenSizePickerId] = useState(null);
+  const [collections, setCollections] = useState([]);
+  const [activityDivisions, setActivityDivisions] = useState([]);
 
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
@@ -269,6 +269,8 @@ function HomeContent() {
     getStoreContent('homepage_hero').then((content) => {
       if (content) setCmsContent(content);
     });
+    getPublishedCollections().then((data) => setCollections(data || []));
+    getActivityDivisions().then((data) => setActivityDivisions(data || []));
   }, []);
 
   const shoeAngleFrames = heroProduct?.product_images?.length > 0
@@ -385,7 +387,9 @@ function HomeContent() {
     return true;
   });
 
-  const currentCategoryActivities = ACTIVITY_PRESETS[activeSub] || [];
+  const currentCategoryActivities = activityDivisions
+    .filter((d) => d.primary_category === SUB_TO_PRIMARY_CATEGORY[activeSub])
+    .map((d) => d.name);
 
   const subNavTabs = [
     { id: 'all', label: 'All Articles', icon: Layers },
@@ -752,6 +756,35 @@ function HomeContent() {
               </button>
             </div>
 
+          </div>
+        </section>
+      )}
+
+      {collections.length > 0 && (
+        <section className="max-w-[1440px] mx-auto px-6 pt-10">
+          <h2 className="text-2xl font-black uppercase tracking-tight mb-5">Shop The Drops</h2>
+          <div className="flex gap-5 overflow-x-auto pb-2">
+            {collections.map((c) => {
+              const cover = c.collection_products?.[0]?.products?.product_images?.[0]?.url;
+              const itemCount = c.collection_products?.length || 0;
+              return (
+                <Link
+                  key={c.id}
+                  href={`/collections/${c.slug}`}
+                  className="group relative w-64 h-40 shrink-0 rounded-2xl overflow-hidden bg-[#111111] flex items-end p-4"
+                >
+                  {cover ? (
+                    <img src={cover} alt={c.name} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-75 group-hover:scale-105 transition-all duration-300" />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a1a] to-black" />
+                  )}
+                  <div className="relative z-10">
+                    <h3 className="text-white font-black uppercase text-lg leading-tight">{c.name}</h3>
+                    <span className="text-[#CCFF00] text-[11px] font-mono font-bold">{itemCount} item{itemCount === 1 ? '' : 's'}</span>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}

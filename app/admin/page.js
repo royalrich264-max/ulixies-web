@@ -16,6 +16,7 @@ import {
   deleteProductImageFile,
   getInventoryVariants,
   adjustInventoryStock,
+  getInventoryLogs,
   getAllCustomers,
   getAllReviews,
   toggleReviewPublish,
@@ -35,7 +36,13 @@ import {
   markAllNotificationsRead,
   getAllSupportTickets,
   updateSupportTicket,
-  signOutUser
+  signOutUser,
+  getCollectionProductIds,
+  addProductToCollection,
+  removeProductFromCollection,
+  getActivityDivisions,
+  createActivityDivision,
+  deleteActivityDivision
 } from '@/services/storeService';
 import { 
   LayoutDashboard, ShoppingBag, Boxes, Users, RotateCcw, 
@@ -46,12 +53,6 @@ import {
   TrendingUp, ShieldCheck, Sliders, Image as ImageIcon,
   Terminal, MinusCircle, Percent, Edit3, Cpu, Check, History, LifeBuoy
 } from 'lucide-react';
-
-const ACTIVITY_PRESETS = {
-  shoes: ['Gym & Training', 'Running', 'Lifestyle / Everyday', 'Basketball', 'Football / Soccer', 'Trail & Outdoor'],
-  clothing: ['Gym & Workout Shirts', 'Hoodies & Sweatshirts', 'Training Shorts', 'Track Pants & Tights', 'Jackets & Outerwear', 'Everyday Casual'],
-  accessories: ['Training Bags & Backpacks', 'Performance Socks', 'Caps & Headwear', 'Gloves & Gym Straps']
-};
 
 const SIZE_PRESETS = {
   shoes: ['5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12', '13', '14'],
@@ -71,12 +72,24 @@ export default function CrownAdminControlTower() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [inventoryLogs, setInventoryLogs] = useState([]);
+  const [activityDivisions, setActivityDivisions] = useState([]);
+  const [newDivisionName, setNewDivisionName] = useState('');
+  const [inventorySubTab, setInventorySubTab] = useState('stock');
+  const [invDeptFilter, setInvDeptFilter] = useState('all');
+  const [invCategoryFilter, setInvCategoryFilter] = useState('all');
+  const [invActivityFilter, setInvActivityFilter] = useState('all');
   const [customers, setCustomers] = useState([]);
   const [returnsList, setReturnsList] = useState([]);
   const [reviewsList, setReviewsList] = useState([]);
   const [couponsList, setCouponsList] = useState([]);
   const [customCollections, setCustomCollections] = useState([]);
   const [newCollectionTitle, setNewCollectionTitle] = useState('');
+  const [newCollectionDesc, setNewCollectionDesc] = useState('');
+  const [manageCollectionModal, setManageCollectionModal] = useState(null);
+  const [collectionProductIds, setCollectionProductIds] = useState([]);
+  const [collectionProductsLoading, setCollectionProductsLoading] = useState(false);
+  const [collectionProductSearch, setCollectionProductSearch] = useState('');
   const [auditLog, setAuditLog] = useState([]);
   const [adminNotifications, setAdminNotifications] = useState([]);
   const [supportTickets, setSupportTickets] = useState([]);
@@ -133,6 +146,7 @@ export default function CrownAdminControlTower() {
 
   // Modals & Details
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState('all');
   const [selectedReturnDetails, setSelectedReturnDetails] = useState(null);
   const [editingProductModal, setEditingProductModal] = useState(null);
   const [editingVariants, setEditingVariants] = useState([]);
@@ -146,31 +160,34 @@ export default function CrownAdminControlTower() {
   const [wizActivity, setWizActivity] = useState('Gym & Training');
   const [wizName, setWizName] = useState('');
   const [wizSku, setWizSku] = useState('');
-  const [wizCostPrice, setWizCostPrice] = useState('45.00');
-  const [wizRegPrice, setWizRegPrice] = useState('150.00');
+  const [wizCostPrice, setWizCostPrice] = useState('');
+  const [wizRegPrice, setWizRegPrice] = useState('');
   const [wizSalePrice, setWizSalePrice] = useState('');
   const [wizShortDesc, setWizShortDesc] = useState('');
   const [wizDesc, setWizDesc] = useState('');
-  const [wizTags, setWizTags] = useState('performance, active, air');
+  const [wizTags, setWizTags] = useState('');
   const [wizStatus, setWizStatus] = useState('active');
   const [wizImages, setWizImages] = useState([]);
   const [wizUploading, setWizUploading] = useState(false);
-  const [wizColors, setWizColors] = useState(['White', 'Black']);
-  const [wizSizes, setWizSizes] = useState(['8.5', '9.5', '10', '10.5', '11']);
+  const [wizColors, setWizColors] = useState([]);
+  const [wizSizes, setWizSizes] = useState([]);
   const [customSizeInput, setCustomSizeInput] = useState('');
   const [wizMatrix, setWizMatrix] = useState([]);
   const [bulkStockVal, setBulkStockVal] = useState('0');
-  const [wizMaterials, setWizMaterials] = useState('Flyknit mesh, Zoom Air units');
-  const [wizFit, setWizFit] = useState('True to standard athletic size');
-  const [wizWeight, setWizWeight] = useState('8.2 oz');
-  const [wizCare, setWizCare] = useState('Spot clean with cold water.');
-  const [wizOrigin, setWizOrigin] = useState('Vietnam');
-  const [wizFeatures, setWizFeatures] = useState('Dual Zoom Air, Flyknit Upper, High Rebound Matrix');
+  const [wizMaterials, setWizMaterials] = useState('');
+  const [wizFit, setWizFit] = useState('');
+  const [wizWeight, setWizWeight] = useState('');
+  const [wizCare, setWizCare] = useState('');
+  const [wizOrigin, setWizOrigin] = useState('');
+  const [wizFeatures, setWizFeatures] = useState('');
   const [wizSeoTitle, setWizSeoTitle] = useState('');
   const [wizMetaDesc, setWizMetaDesc] = useState('');
   const [wizSlug, setWizSlug] = useState('');
   const [wizIsHero, setWizIsHero] = useState(false);
   const [wizIsNew, setWizIsNew] = useState(true);
+
+  // Sales & Markdowns — per-product custom sale price inputs
+  const [saleInputs, setSaleInputs] = useState({});
 
   // New Coupon Form
   const [newCoupon, setNewCoupon] = useState({ code: '', discount_type: 'percentage', discount_value: '20', usage_limit: '500', per_user_limit: '1' });
@@ -247,7 +264,7 @@ export default function CrownAdminControlTower() {
   const refreshAll = async () => {
     setLoading(true);
     try {
-      const [p, o, inv, cust, ret, rev, coup, couponCounts, colls, cont, sett, gateway, ship, audit, notifs, tickets] = await Promise.all([
+      const [p, o, inv, invLogs, cust, ret, rev, coup, couponCounts, colls, cont, sett, gateway, ship, audit, notifs, tickets, divisions] = await Promise.all([
         getHomeProducts(),
         supabase.from('orders').select(`
           *,
@@ -268,12 +285,16 @@ export default function CrownAdminControlTower() {
                 name,
                 base_price,
                 sale_price,
+                department,
+                primary_category,
+                subcategory,
                 product_images (url)
               )
             )
           )
         `).order('created_at', { ascending: false }),
         getInventoryVariants(),
+        getInventoryLogs(),
         getAllCustomers(),
         supabase.from('returns').select('*').order('created_at', { ascending: false }),
         getAllReviews(),
@@ -286,12 +307,15 @@ export default function CrownAdminControlTower() {
         getStoreSettings('shipping_rules'),
         getAuditLog(),
         getAdminNotifications(),
-        getAllSupportTickets()
+        getAllSupportTickets(),
+        getActivityDivisions()
       ]);
 
       setProducts(p || []);
       setOrders(o.data || []);
       setInventory(inv || []);
+      setInventoryLogs(invLogs || []);
+      setActivityDivisions(divisions || []);
       setSupportTickets(tickets || []);
       setCustomers(cust || []);
       setReturnsList(ret.data || []);
@@ -347,21 +371,37 @@ export default function CrownAdminControlTower() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Sync Category to Activity Presets
+  // Sync Category to Activity Divisions (admin-managed, DB-backed)
+  const getDivisionsForCategory = (cat) => activityDivisions.filter((d) => d.primary_category === cat);
+
   const handlePrimaryCatChange = (cat) => {
     setWizPrimaryCat(cat);
-    const availableActs = ACTIVITY_PRESETS[cat] || [];
-    setWizActivity(availableActs[0] || 'General');
+    const availableActs = getDivisionsForCategory(cat);
+    setWizActivity(availableActs[0]?.name || '');
+  };
 
-    if (cat === 'shoes') {
-      setWizSizes(['8.5', '9.5', '10', '10.5', '11']);
-      setWizMaterials('Flyknit upper, Zoom Air units, rubber outsole');
-    } else if (cat === 'clothing') {
-      setWizSizes(['S', 'M', 'L', 'XL']);
-      setWizMaterials('100% Dri-FIT Recycled Polyester');
-    } else {
-      setWizSizes(['ONE SIZE']);
-      setWizMaterials('High-density woven ripstop nylon');
+  const handleAddDivision = async (cat) => {
+    const trimmed = newDivisionName.trim();
+    if (!trimmed) return;
+    try {
+      await createActivityDivision(cat, trimmed);
+      setNewDivisionName('');
+      const divisions = await getActivityDivisions();
+      setActivityDivisions(divisions || []);
+      setWizActivity(trimmed);
+    } catch (err) {
+      alert(`Could not add division: ${err.message}`);
+    }
+  };
+
+  const handleDeleteDivision = async (division) => {
+    if (!confirm(`Delete division "${division.name}"? Products already using it keep their value, but it won't be selectable anymore.`)) return;
+    try {
+      await deleteActivityDivision(division.id);
+      const divisions = await getActivityDivisions();
+      setActivityDivisions(divisions || []);
+    } catch (err) {
+      alert(`Could not delete division: ${err.message}`);
     }
   };
 
@@ -419,9 +459,44 @@ export default function CrownAdminControlTower() {
     }
   };
 
+  const resetWizard = () => {
+    setWizardStep(1);
+    setWizDept('men');
+    setWizPrimaryCat('shoes');
+    setWizActivity('Gym & Training');
+    setWizName('');
+    setWizSku('');
+    setWizCostPrice('');
+    setWizRegPrice('');
+    setWizSalePrice('');
+    setWizShortDesc('');
+    setWizDesc('');
+    setWizTags('');
+    setWizStatus('active');
+    setWizImages([]);
+    setWizColors([]);
+    setWizSizes([]);
+    setCustomSizeInput('');
+    setWizMatrix([]);
+    setWizMaterials('');
+    setWizFit('');
+    setWizWeight('');
+    setWizCare('');
+    setWizOrigin('');
+    setWizFeatures('');
+    setWizSeoTitle('');
+    setWizMetaDesc('');
+    setWizSlug('');
+    setWizIsHero(false);
+    setWizIsNew(true);
+  };
+
   const handlePublishProduct = async () => {
     if (!wizName.trim()) return alert('Please enter product title.');
     if (wizImages.length === 0) return alert('Please upload at least 1 photo from your device.');
+    if (!wizRegPrice || Number(wizRegPrice) <= 0) return alert('Please enter a real base price.');
+    if (wizSizes.length === 0) return alert('Please add at least 1 size.');
+    if (wizMatrix.length === 0) return alert('No size/color variants generated — check sizes and colors.');
     setLoading(true);
     try {
       await createFullAdminProduct({
@@ -452,9 +527,7 @@ export default function CrownAdminControlTower() {
       });
       alert(`Product "${wizName}" successfully created.`);
       setActiveTab('products');
-      setWizardStep(1);
-      setWizImages([]);
-      setWizName('');
+      resetWizard();
       refreshAll();
     } catch (err) {
       alert(`Publishing Error: ${err.message}`);
@@ -618,6 +691,73 @@ export default function CrownAdminControlTower() {
     }
   };
 
+  const handleSetCustomSalePrice = async (product) => {
+    const raw = saleInputs[product.id];
+    const price = Number(raw);
+    if (!raw || !price || price <= 0) return alert('Enter a valid sale price.');
+    if (price >= Number(product.base_price)) return alert('Sale price must be less than the base price.');
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ is_on_sale: true, sale_price: price })
+        .eq('id', product.id);
+      if (error) throw error;
+      setSaleInputs((prev) => ({ ...prev, [product.id]: '' }));
+      await refreshAll();
+    } catch (err) {
+      alert(`Sale update failed: ${err.message}`);
+    }
+  };
+
+  const openManageCollection = async (collection) => {
+    setManageCollectionModal(collection);
+    setCollectionProductSearch('');
+    setCollectionProductsLoading(true);
+    try {
+      const ids = await getCollectionProductIds(collection.id);
+      setCollectionProductIds(ids);
+    } catch (err) {
+      alert(`Could not load collection products: ${err.message}`);
+      setCollectionProductIds([]);
+    } finally {
+      setCollectionProductsLoading(false);
+    }
+  };
+
+  const handleToggleCollectionProduct = async (productId, isMember) => {
+    if (!manageCollectionModal) return;
+    try {
+      if (isMember) {
+        await removeProductFromCollection(manageCollectionModal.id, productId);
+        setCollectionProductIds((prev) => prev.filter((id) => id !== productId));
+      } else {
+        await addProductToCollection(manageCollectionModal.id, productId);
+        setCollectionProductIds((prev) => [...prev, productId]);
+      }
+    } catch (err) {
+      alert(`Update failed: ${err.message}`);
+    }
+  };
+
+  const closeManageCollection = () => {
+    setManageCollectionModal(null);
+    setCollectionProductIds([]);
+    refreshAll();
+  };
+
+  const handleTogglePublishCollection = async (collection) => {
+    try {
+      const { error } = await supabase
+        .from('collections')
+        .update({ is_published: !collection.is_published })
+        .eq('id', collection.id);
+      if (error) throw error;
+      refreshAll();
+    } catch (err) {
+      alert(`Publish toggle failed: ${err.message}`);
+    }
+  };
+
   const handleSetDepartmentHero = async (product) => {
     try {
       const makingHero = !product.is_best_seller;
@@ -756,6 +896,97 @@ export default function CrownAdminControlTower() {
     document.body.removeChild(link);
   };
 
+  const generatePdfReport = async (title, head, rows) => {
+    if (!rows || rows.length === 0) return alert('No records to report.');
+    const { jsPDF } = await import('jspdf');
+    const autoTable = (await import('jspdf-autotable')).default;
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text(title, 14, 15);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(`Generated ${new Date().toLocaleString()}`, 14, 21);
+    autoTable(doc, {
+      startY: 26,
+      head: [head],
+      body: rows,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [37, 99, 235] },
+    });
+    doc.save(`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.pdf`);
+  };
+
+  const generateInvoicePdf = async (order) => {
+    const { jsPDF } = await import('jspdf');
+    const autoTable = (await import('jspdf-autotable')).default;
+    const doc = new jsPDF();
+    const rawAddr = order.shipping_address || {};
+    const recipientName = rawAddr.recipient_name || rawAddr.name || 'Customer';
+    const email = order.guest_email || rawAddr.email || '—';
+    const phone = rawAddr.phone || '—';
+    const street = rawAddr.street || rawAddr.address || '';
+    const addressLine = [street, rawAddr.city, rawAddr.postal_code || rawAddr.postalCode].filter(Boolean).join(', ');
+
+    doc.setFontSize(18);
+    doc.setTextColor(0);
+    doc.text('ULIXIES', 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text('Official Invoice', 14, 24);
+
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    doc.text(`Invoice #: ${order.order_number || String(order.id).slice(0, 8)}`, 140, 18);
+    doc.text(`Date: ${order.created_at ? new Date(order.created_at).toLocaleDateString() : '—'}`, 140, 23);
+    doc.text(`Payment: ${(order.payment_status || 'pending').toUpperCase()}`, 140, 28);
+
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text('Bill To', 14, 36);
+    doc.setTextColor(0);
+    doc.setFontSize(10);
+    doc.text(recipientName, 14, 41);
+    doc.setFontSize(9);
+    doc.text(email, 14, 46);
+    doc.text(phone, 14, 51);
+    doc.text(addressLine || 'No address on file', 14, 56, { maxWidth: 180 });
+
+    const items = order.order_items || [];
+    const rows = items.map((item) => {
+      const name = item.product_name || item.product_variants?.products?.name || 'Item';
+      const spec = `${item.color || item.product_variants?.color || '—'} / ${item.size || item.product_variants?.size || '—'}`;
+      const qty = item.quantity || 1;
+      const unit = Number(item.unit_price || 0);
+      return [name, spec, qty, `$${unit.toFixed(2)}`, `$${(unit * qty).toFixed(2)}`];
+    });
+
+    autoTable(doc, {
+      startY: 64,
+      head: [['Product', 'Spec', 'Qty', 'Unit Price', 'Line Total']],
+      body: rows,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [37, 99, 235] },
+    });
+
+    const finalY = doc.lastAutoTable.finalY + 8;
+    const subtotal = Number(order.subtotal ?? order.total_amount ?? order.total ?? 0);
+    const shipping = Number(order.shipping_cost || 0);
+    const discount = Number(order.discount_amount || 0);
+    const total = Number(order.total_amount ?? order.total ?? 0);
+
+    let y = finalY;
+    doc.setFontSize(10);
+    doc.setTextColor(80);
+    doc.text(`Subtotal: $${subtotal.toFixed(2)}`, 140, y); y += 6;
+    if (shipping) { doc.text(`Shipping: $${shipping.toFixed(2)}`, 140, y); y += 6; }
+    if (discount) { doc.text(`Discount: -$${discount.toFixed(2)}`, 140, y); y += 6; }
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text(`Total: $${total.toFixed(2)}`, 140, y + 2);
+
+    doc.save(`invoice-${order.order_number || order.id}.pdf`);
+  };
+
   // Helper to reliably find an image for an ordered line item without external internet fallbacks
   const getOrderItemImage = (item) => {
     if (item?.product_variants?.products?.product_images?.[0]?.url) {
@@ -790,6 +1021,62 @@ export default function CrownAdminControlTower() {
   const activeSalesCount = products.filter(p => p.is_on_sale || (p.sale_price && Number(p.sale_price) < Number(p.base_price))).length;
   const unreadNotificationsCount = adminNotifications.filter(n => !n.is_read).length;
   const openTicketsCount = supportTickets.filter(t => t.status === 'open').length;
+
+  // Flattened order_items with resolved customer identity, for the Inventory "Customer Requests" view
+  const orderItemsWithCustomers = useMemo(() => {
+    const rows = [];
+    orders.forEach((o) => {
+      const addr = o.shipping_address || {};
+      const customerName = addr.recipient_name || addr.name || 'Guest';
+      const customerEmail = o.guest_email || addr.email || '—';
+      (o.order_items || []).forEach((item) => {
+        rows.push({
+          orderId: o.id,
+          orderNumber: o.order_number,
+          orderDate: o.created_at,
+          orderStatus: o.status,
+          variantId: item.variant_id,
+          productName: item.product_variants?.products?.name || item.product_name || 'Unknown',
+          size: item.product_variants?.size || item.size,
+          color: item.product_variants?.color || item.color,
+          department: item.product_variants?.products?.department,
+          primaryCategory: item.product_variants?.products?.primary_category,
+          subcategory: item.product_variants?.products?.subcategory,
+          quantity: item.quantity,
+          customerName,
+          customerEmail,
+        });
+      });
+    });
+    return rows.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+  }, [orders]);
+
+  // Inventory department / sub-department / division filters
+  const invMatchesFilters = (department, primaryCategory, subcategory) => {
+    if (invDeptFilter !== 'all' && department !== invDeptFilter) return false;
+    if (invCategoryFilter !== 'all' && primaryCategory !== invCategoryFilter) return false;
+    if (invActivityFilter !== 'all' && subcategory !== invActivityFilter) return false;
+    return true;
+  };
+
+  const filteredInventory = useMemo(() => {
+    return inventory.filter((v) => invMatchesFilters(v.products?.department, v.products?.primary_category, v.products?.subcategory));
+  }, [inventory, invDeptFilter, invCategoryFilter, invActivityFilter]);
+
+  const filteredInventoryLogs = useMemo(() => {
+    return inventoryLogs.filter((l) => {
+      const p = l.product_variants?.products || {};
+      return invMatchesFilters(p.department, p.primary_category, p.subcategory);
+    });
+  }, [inventoryLogs, invDeptFilter, invCategoryFilter, invActivityFilter]);
+
+  const filteredOrderItemsWithCustomers = useMemo(() => {
+    return orderItemsWithCustomers.filter((r) => invMatchesFilters(r.department, r.primaryCategory, r.subcategory));
+  }, [orderItemsWithCustomers, invDeptFilter, invCategoryFilter, invActivityFilter]);
+
+  const invActivityOptions = invCategoryFilter === 'all'
+    ? Array.from(new Set(activityDivisions.map((d) => d.name)))
+    : activityDivisions.filter((d) => d.primary_category === invCategoryFilter).map((d) => d.name);
 
   // Real 7-Day Revenue Plotting
   const last7Days = Array.from({ length: 7 }).map((_, i) => {
@@ -836,8 +1123,8 @@ export default function CrownAdminControlTower() {
 
   if (!authChecked || !authorized) {
     return (
-      <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
-        <span className="text-xs font-mono uppercase tracking-widest text-gray-500">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <span className="text-xs uppercase tracking-widest text-slate-400 font-semibold">
           Verifying admin access...
         </span>
       </div>
@@ -845,41 +1132,41 @@ export default function CrownAdminControlTower() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#0D0D0D] text-white font-sans antialiased">
+    <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
 
       {/* ─────────────────────────────────────────────────────────── */}
       {/* GLOBAL SEARCH DIALOG (Ctrl+K)                               */}
       {/* ─────────────────────────────────────────────────────────── */}
       {isSearchOpen && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-start justify-center pt-20 px-4">
-          <div className="bg-[#181818] border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl font-mono text-xs">
-            <div className="p-4 border-b border-white/10 flex items-center gap-3">
-              <Search className="w-5 h-5 text-[#CCFF00]" />
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-start justify-center pt-20 px-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl overflow-hidden shadow-xl text-xs">
+            <div className="p-4 border-b border-slate-200 flex items-center gap-3">
+              <Search className="w-5 h-5 text-blue-600" />
               <input
                 type="text"
                 autoFocus
-                placeholder="Search products, SKUs, orders, athletes, returns, reviews, coupons..."
+                placeholder="Search products, SKUs, orders, customers, returns, reviews, coupons..."
                 value={globalQuery}
                 onChange={(e) => setGlobalQuery(e.target.value)}
-                className="w-full bg-transparent text-sm text-white outline-none"
+                className="w-full bg-transparent text-sm text-slate-900 outline-none"
               />
-              <button onClick={() => setIsSearchOpen(false)} className="text-gray-500 hover:text-white p-1">
+              <button onClick={() => setIsSearchOpen(false)} className="text-slate-400 hover:text-slate-900 p-1">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="max-h-96 overflow-y-auto p-4 space-y-4">
               {globalQuery.trim() === '' ? (
-                <div className="text-center text-gray-500 py-6">Type to search the entire store infrastructure...</div>
+                <div className="text-center text-slate-400 py-6">Type to search the store...</div>
               ) : (
                 <>
                   {globalResults.products.length > 0 && (
                     <div>
-                      <div className="text-[10px] text-gray-400 font-bold uppercase mb-1">Products ({globalResults.products.length})</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">Products ({globalResults.products.length})</div>
                       {globalResults.products.map(p => (
-                        <div key={p.id} onClick={() => { setActiveTab('products'); setIsSearchOpen(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg flex justify-between cursor-pointer mb-1">
-                          <span className="font-bold text-white">{p.name}</span>
-                          <span className="text-gray-400">${p.base_price} • SKU: {p.sku || 'N/A'}</span>
+                        <div key={p.id} onClick={() => { setActiveTab('products'); setIsSearchOpen(false); }} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-lg flex justify-between cursor-pointer mb-1">
+                          <span className="font-bold text-slate-900">{p.name}</span>
+                          <span className="text-slate-400">${p.base_price} • SKU: {p.sku || 'N/A'}</span>
                         </div>
                       ))}
                     </div>
@@ -887,11 +1174,11 @@ export default function CrownAdminControlTower() {
 
                   {globalResults.orders.length > 0 && (
                     <div>
-                      <div className="text-[10px] text-gray-400 font-bold uppercase mb-1">Orders ({globalResults.orders.length})</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">Orders ({globalResults.orders.length})</div>
                       {globalResults.orders.map(o => (
-                        <div key={o.id} onClick={() => { setActiveTab('orders'); setIsSearchOpen(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg flex justify-between cursor-pointer mb-1">
-                          <span className="font-bold text-white">{o.order_number || o.id.slice(0, 8)}</span>
-                          <span className="text-[#CCFF00]">${o.total_amount ?? o.total} • {o.status}</span>
+                        <div key={o.id} onClick={() => { setActiveTab('orders'); setIsSearchOpen(false); }} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-lg flex justify-between cursor-pointer mb-1">
+                          <span className="font-bold text-slate-900">{o.order_number || o.id.slice(0, 8)}</span>
+                          <span className="text-blue-600">${o.total_amount ?? o.total} • {o.status}</span>
                         </div>
                       ))}
                     </div>
@@ -899,11 +1186,11 @@ export default function CrownAdminControlTower() {
 
                   {globalResults.customers.length > 0 && (
                     <div>
-                      <div className="text-[10px] text-gray-400 font-bold uppercase mb-1">Athletes ({globalResults.customers.length})</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">Customers ({globalResults.customers.length})</div>
                       {globalResults.customers.map(c => (
-                        <div key={c.id} onClick={() => { setActiveTab('customers'); setIsSearchOpen(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg flex justify-between cursor-pointer mb-1">
-                          <span className="font-bold text-white">{c.full_name}</span>
-                          <span className="text-gray-400">{c.email}</span>
+                        <div key={c.id} onClick={() => { setActiveTab('customers'); setIsSearchOpen(false); }} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-lg flex justify-between cursor-pointer mb-1">
+                          <span className="font-bold text-slate-900">{c.full_name}</span>
+                          <span className="text-slate-400">{c.email}</span>
                         </div>
                       ))}
                     </div>
@@ -911,11 +1198,11 @@ export default function CrownAdminControlTower() {
 
                   {globalResults.returns.length > 0 && (
                     <div>
-                      <div className="text-[10px] text-gray-400 font-bold uppercase mb-1">Returns ({globalResults.returns.length})</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">Returns ({globalResults.returns.length})</div>
                       {globalResults.returns.map(r => (
-                        <div key={r.id} onClick={() => { setActiveTab('returns'); setIsSearchOpen(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg flex justify-between cursor-pointer mb-1">
-                          <span className="font-bold text-white">{r.order_number} - {r.product_name}</span>
-                          <span className="text-red-400">{r.status}</span>
+                        <div key={r.id} onClick={() => { setActiveTab('returns'); setIsSearchOpen(false); }} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-lg flex justify-between cursor-pointer mb-1">
+                          <span className="font-bold text-slate-900">{r.order_number} - {r.product_name}</span>
+                          <span className="text-red-500">{r.status}</span>
                         </div>
                       ))}
                     </div>
@@ -923,11 +1210,11 @@ export default function CrownAdminControlTower() {
 
                   {globalResults.support.length > 0 && (
                     <div>
-                      <div className="text-[10px] text-gray-400 font-bold uppercase mb-1">Support Tickets ({globalResults.support.length})</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">Support Tickets ({globalResults.support.length})</div>
                       {globalResults.support.map(t => (
-                        <div key={t.id} onClick={() => { setActiveTab('support'); setIsSearchOpen(false); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg flex justify-between cursor-pointer mb-1">
-                          <span className="font-bold text-white">{t.name} - {t.subject}</span>
-                          <span className="text-[#CCFF00]">{t.status}</span>
+                        <div key={t.id} onClick={() => { setActiveTab('support'); setIsSearchOpen(false); }} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-lg flex justify-between cursor-pointer mb-1">
+                          <span className="font-bold text-slate-900">{t.name} - {t.subject}</span>
+                          <span className="text-blue-600">{t.status}</span>
                         </div>
                       ))}
                     </div>
@@ -942,16 +1229,16 @@ export default function CrownAdminControlTower() {
       {/* ─────────────────────────────────────────────────────────── */}
       {/* SIDEBAR NAVIGATION                                          */}
       {/* ─────────────────────────────────────────────────────────── */}
-      <aside className="w-64 bg-[#121212] text-white flex flex-col justify-between shrink-0 border-r border-white/10">
+      <aside className="w-64 bg-white text-slate-900 flex flex-col justify-between shrink-0 border-r border-slate-200">
         <div>
-          <div className="p-5 border-b border-white/10 flex items-center justify-between">
+          <div className="p-5 border-b border-slate-200 flex items-center justify-between">
             <div>
-              <div className="text-[10px] font-mono uppercase tracking-widest text-[#CCFF00] font-bold">[ APEX NEXUS ]</div>
-              <div className="text-lg font-black uppercase tracking-tight text-white">CROWN ADMIN</div>
+              <div className="text-[10px] uppercase tracking-widest text-blue-600 font-bold">Ulixies</div>
+              <div className="text-lg font-black uppercase tracking-tight text-slate-900">Admin</div>
             </div>
-            <button 
+            <button
               onClick={() => setIsSearchOpen(true)}
-              className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-gray-400 hover:text-white"
+              className="p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-400 hover:text-slate-900"
               title="Global Search (Ctrl+K)"
             >
               <Search className="w-3.5 h-3.5" />
@@ -963,7 +1250,7 @@ export default function CrownAdminControlTower() {
               <button
                 onClick={() => setActiveTab('dashboard')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                  activeTab === 'dashboard' ? 'bg-[#CCFF00] text-black font-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  activeTab === 'dashboard' ? 'bg-blue-600 text-white font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -975,16 +1262,16 @@ export default function CrownAdminControlTower() {
 
             {/* Store Management */}
             <div>
-              <div className="text-[9px] font-mono uppercase tracking-wider text-gray-500 px-3 mb-1 font-bold">STORE MASTER</div>
+              <div className="text-[9px] uppercase tracking-wider text-slate-400 px-3 mb-1 font-bold">Store</div>
               {[
                 { id: 'products', label: 'Products & Wizard', icon: ShoppingBag, count: products.length },
                 { id: 'sales', label: 'Sales & Markdowns', icon: Percent, count: activeSalesCount },
                 { id: 'categories', label: 'Categories & Drops', icon: Layers, count: customCollections.length },
-                { id: 'inventory', label: 'Inventory Engine', icon: Boxes, alert: lowStockUnits > 0 || outOfStockUnits > 0 },
-                { id: 'orders', label: 'Deliveries & Orders', icon: Truck, count: pendingOrdersCount },
+                { id: 'inventory', label: 'Inventory', icon: Boxes, alert: lowStockUnits > 0 || outOfStockUnits > 0 },
+                { id: 'orders', label: 'Orders & Deliveries', icon: Truck, count: pendingOrdersCount },
                 { id: 'returns', label: 'Returns & Inspection', icon: RotateCcw, count: pendingReturnsCount },
                 { id: 'support', label: 'Customer Support', icon: LifeBuoy, count: openTicketsCount },
-                { id: 'customers', label: 'Customer Passports', icon: Users, count: customers.length },
+                { id: 'customers', label: 'Customers', icon: Users, count: customers.length },
                 { id: 'reviews', label: 'Reviews Moderation', icon: Star, count: reviewsList.length },
               ].map(item => {
                 const Icon = item.icon;
@@ -994,7 +1281,7 @@ export default function CrownAdminControlTower() {
                     key={item.id}
                     onClick={() => setActiveTab(item.id)}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all mb-0.5 ${
-                      isActive ? 'bg-[#CCFF00] text-black font-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      isActive ? 'bg-blue-600 text-white font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -1002,7 +1289,7 @@ export default function CrownAdminControlTower() {
                       <span>{item.label}</span>
                     </div>
                     {item.count !== undefined && item.count > 0 && (
-                      <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${isActive ? 'bg-black text-white' : 'bg-white/10 text-gray-300'}`}>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
                         {item.count}
                       </span>
                     )}
@@ -1014,7 +1301,7 @@ export default function CrownAdminControlTower() {
 
             {/* Growth & CMS */}
             <div>
-              <div className="text-[9px] font-mono uppercase tracking-wider text-gray-500 px-3 mb-1 font-bold">GROWTH & CMS</div>
+              <div className="text-[9px] uppercase tracking-wider text-slate-400 px-3 mb-1 font-bold">Growth & CMS</div>
               {[
                 { id: 'content', label: 'Storefront CMS', icon: Palette },
                 { id: 'media', label: 'Media Library', icon: ImageIcon },
@@ -1031,7 +1318,7 @@ export default function CrownAdminControlTower() {
                     key={item.id}
                     onClick={() => setActiveTab(item.id)}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all mb-0.5 ${
-                      isActive ? 'bg-[#CCFF00] text-black font-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      isActive ? 'bg-blue-600 text-white font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -1045,7 +1332,7 @@ export default function CrownAdminControlTower() {
 
             {/* System */}
             <div>
-              <div className="text-[9px] font-mono uppercase tracking-wider text-gray-500 px-3 mb-1 font-bold">SYSTEM CONTROL</div>
+              <div className="text-[9px] uppercase tracking-wider text-slate-400 px-3 mb-1 font-bold">System</div>
               {[
                 { id: 'notifications', label: 'Notification Log', icon: Bell, count: unreadNotificationsCount },
                 { id: 'settings', label: 'Website Settings', icon: Settings },
@@ -1059,7 +1346,7 @@ export default function CrownAdminControlTower() {
                     key={item.id}
                     onClick={() => setActiveTab(item.id)}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all mb-0.5 ${
-                      isActive ? 'bg-[#CCFF00] text-black font-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      isActive ? 'bg-blue-600 text-white font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -1067,7 +1354,7 @@ export default function CrownAdminControlTower() {
                       <span>{item.label}</span>
                     </div>
                     {item.count !== undefined && item.count > 0 && (
-                      <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${isActive ? 'bg-black text-white' : 'bg-white/10 text-gray-300'}`}>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
                         {item.count}
                       </span>
                     )}
@@ -1078,12 +1365,12 @@ export default function CrownAdminControlTower() {
           </nav>
         </div>
 
-        <div className="p-3 border-t border-white/10">
+        <div className="p-3 border-t border-slate-200">
           <button
             onClick={async () => { await signOutUser(); window.location.href = '/login'; }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-400 hover:text-red-400 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-500 hover:text-red-600 transition-colors"
           >
-            <LogOut className="w-4 h-4" /> Sign Out Nexus
+            <LogOut className="w-4 h-4" /> Sign Out
           </button>
         </div>
       </aside>
@@ -1091,24 +1378,24 @@ export default function CrownAdminControlTower() {
       {/* ─────────────────────────────────────────────────────────── */}
       {/* MAIN VIEWPORT                                               */}
       {/* ─────────────────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#0A0A0A]">
-        <header className="sticky top-0 z-30 bg-[#111111]/95 backdrop-blur border-b border-white/10 px-8 h-16 flex items-center justify-between">
-          <span className="text-[10px] font-mono font-bold uppercase text-[#CCFF00] bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">
-            PORTAL // {activeTab.toUpperCase()}
+      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-slate-50">
+        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 px-8 h-16 flex items-center justify-between">
+          <span className="text-[10px] font-bold uppercase text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-md">
+            {activeTab.replace(/-/g, ' ')}
           </span>
 
           <div className="flex items-center gap-3">
             <button
               onClick={refreshAll}
-              className="p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors text-xs font-bold flex items-center gap-1.5"
+              className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors text-xs font-bold flex items-center gap-1.5"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#CCFF00]' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
             </button>
             <button
-              onClick={() => { setActiveTab('add-product'); setWizardStep(1); }}
-              className="px-4 py-2 bg-[#CCFF00] hover:bg-[#b8e600] text-black rounded-xl text-xs font-black uppercase flex items-center gap-1.5 shadow-md"
+              onClick={() => { resetWizard(); setActiveTab('add-product'); }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase flex items-center gap-1.5 shadow-sm"
             >
-              <Plus className="w-3.5 h-3.5" /> + ADD PRODUCT
+              <Plus className="w-3.5 h-3.5" /> Add Product
             </button>
           </div>
         </header>
@@ -1118,93 +1405,93 @@ export default function CrownAdminControlTower() {
           {/* 1. MASTER DASHBOARD */}
           {activeTab === 'dashboard' && (
             <div className="space-y-8">
-              <div className="flex items-center gap-3 overflow-x-auto pb-2 font-mono text-xs">
-                <button onClick={() => { setActiveTab('add-product'); setWizardStep(1); }} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0">
-                  <Plus className="w-3.5 h-3.5 text-[#CCFF00]" /> [ + ADD PRODUCT ]
+              <div className="flex items-center gap-3 overflow-x-auto pb-2 text-xs">
+                <button onClick={() => { resetWizard(); setActiveTab('add-product'); }} className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0 shadow-sm">
+                  <Plus className="w-3.5 h-3.5 text-blue-600" /> Add Product
                 </button>
-                <button onClick={() => setActiveTab('sales')} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0">
-                  <Percent className="w-3.5 h-3.5 text-red-400" /> [ CLEARANCE ENGINE ]
+                <button onClick={() => setActiveTab('sales')} className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0 shadow-sm">
+                  <Percent className="w-3.5 h-3.5 text-red-500" /> Clearance
                 </button>
-                <button onClick={() => setActiveTab('orders')} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0">
-                  <Truck className="w-3.5 h-3.5 text-blue-400" /> [ VIEW ORDERS ]
+                <button onClick={() => setActiveTab('orders')} className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0 shadow-sm">
+                  <Truck className="w-3.5 h-3.5 text-blue-500" /> View Orders
                 </button>
-                <button onClick={() => setActiveTab('inventory')} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0">
-                  <Boxes className="w-3.5 h-3.5 text-purple-400" /> [ UPDATE INVENTORY ]
+                <button onClick={() => setActiveTab('inventory')} className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0 shadow-sm">
+                  <Boxes className="w-3.5 h-3.5 text-purple-500" /> Update Inventory
                 </button>
-                <button onClick={() => setActiveTab('returns')} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0">
-                  <RotateCcw className="w-3.5 h-3.5 text-red-400" /> [ VIEW RETURNS ]
+                <button onClick={() => setActiveTab('returns')} className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl font-bold uppercase flex items-center gap-1.5 shrink-0 shadow-sm">
+                  <RotateCcw className="w-3.5 h-3.5 text-red-500" /> View Returns
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 font-mono">
-                <div className="bg-[#141414] border border-white/10 rounded-2xl p-5">
-                  <div className="flex justify-between items-center text-gray-400 mb-1">
-                    <span className="text-[10px] font-bold uppercase">TOTAL REVENUE (STRIPE)</span>
-                    <DollarSign className="w-4 h-4 text-[#CCFF00]" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex justify-between items-center text-slate-400 mb-1">
+                    <span className="text-[10px] font-bold uppercase">Total Revenue</span>
+                    <DollarSign className="w-4 h-4 text-blue-600" />
                   </div>
-                  <div className="text-3xl font-black text-white">${totalRevenue.toFixed(2)}</div>
-                  <div className="text-[10px] text-gray-500 mt-2">{orders.length} total orders recorded</div>
+                  <div className="text-3xl font-black text-slate-900">${totalRevenue.toFixed(2)}</div>
+                  <div className="text-[10px] text-slate-400 mt-2">{orders.length} total orders recorded</div>
                 </div>
 
-                <div className="bg-[#141414] border border-white/10 rounded-2xl p-5">
-                  <div className="flex justify-between items-center text-gray-400 mb-1">
-                    <span className="text-[10px] font-bold uppercase">TODAY'S REVENUE</span>
-                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex justify-between items-center text-slate-400 mb-1">
+                    <span className="text-[10px] font-bold uppercase">Today's Revenue</span>
+                    <TrendingUp className="w-4 h-4 text-emerald-500" />
                   </div>
-                  <div className="text-3xl font-black text-white">${todayRevenue.toFixed(2)}</div>
-                  <div className="text-[10px] text-gray-500 mt-2">{todayOrders.length} orders today</div>
+                  <div className="text-3xl font-black text-slate-900">${todayRevenue.toFixed(2)}</div>
+                  <div className="text-[10px] text-slate-400 mt-2">{todayOrders.length} orders today</div>
                 </div>
 
-                <div className="bg-[#141414] border border-white/10 rounded-2xl p-5">
-                  <div className="flex justify-between items-center text-gray-400 mb-1">
-                    <span className="text-[10px] font-bold uppercase">REGISTERED ATHLETES</span>
-                    <Users className="w-4 h-4 text-blue-400" />
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex justify-between items-center text-slate-400 mb-1">
+                    <span className="text-[10px] font-bold uppercase">Registered Customers</span>
+                    <Users className="w-4 h-4 text-blue-500" />
                   </div>
-                  <div className="text-3xl font-black text-white">{customers.length}</div>
-                  <div className="text-[10px] text-gray-500 mt-2">Active accounts on record</div>
+                  <div className="text-3xl font-black text-slate-900">{customers.length}</div>
+                  <div className="text-[10px] text-slate-400 mt-2">Active accounts on record</div>
                 </div>
 
-                <div className="bg-[#141414] border border-white/10 rounded-2xl p-5">
-                  <div className="flex justify-between items-center text-gray-400 mb-1">
-                    <span className="text-[10px] font-bold uppercase">ACTIVE SALES / DROPS</span>
-                    <Percent className="w-4 h-4 text-red-400" />
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex justify-between items-center text-slate-400 mb-1">
+                    <span className="text-[10px] font-bold uppercase">Active Sales</span>
+                    <Percent className="w-4 h-4 text-red-500" />
                   </div>
-                  <div className="text-3xl font-black text-white">{activeSalesCount}</div>
-                  <div className="text-[10px] text-gray-500 mt-2">Discounted items live on storefront</div>
+                  <div className="text-3xl font-black text-slate-900">{activeSalesCount}</div>
+                  <div className="text-[10px] text-slate-400 mt-2">Discounted items live on storefront</div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs">
-                <div className="p-4 bg-amber-950/30 border border-amber-800/40 rounded-2xl flex items-center justify-between">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between">
                   <div>
-                    <div className="text-[10px] text-amber-400 font-bold uppercase">PENDING DISPATCH</div>
-                    <div className="text-xl font-black text-white mt-1">{pendingOrdersCount} orders</div>
+                    <div className="text-[10px] text-amber-700 font-bold uppercase">Pending Dispatch</div>
+                    <div className="text-xl font-black text-slate-900 mt-1">{pendingOrdersCount} orders</div>
                   </div>
-                  <Clock className="w-5 h-5 text-amber-400" />
+                  <Clock className="w-5 h-5 text-amber-500" />
                 </div>
 
-                <div className="p-4 bg-red-950/30 border border-red-800/40 rounded-2xl flex items-center justify-between">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between">
                   <div>
-                    <div className="text-[10px] text-red-400 font-bold uppercase">OUT OF STOCK</div>
-                    <div className="text-xl font-black text-white mt-1">{outOfStockUnits} variants</div>
+                    <div className="text-[10px] text-red-700 font-bold uppercase">Out Of Stock</div>
+                    <div className="text-xl font-black text-slate-900 mt-1">{outOfStockUnits} variants</div>
                   </div>
-                  <MinusCircle className="w-5 h-5 text-red-400" />
+                  <MinusCircle className="w-5 h-5 text-red-500" />
                 </div>
 
-                <div className="p-4 bg-yellow-950/30 border border-yellow-800/40 rounded-2xl flex items-center justify-between">
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-2xl flex items-center justify-between">
                   <div>
-                    <div className="text-[10px] text-yellow-400 font-bold uppercase">LOW STOCK WARNING</div>
-                    <div className="text-xl font-black text-white mt-1">{lowStockUnits} variants</div>
+                    <div className="text-[10px] text-yellow-700 font-bold uppercase">Low Stock Warning</div>
+                    <div className="text-xl font-black text-slate-900 mt-1">{lowStockUnits} variants</div>
                   </div>
-                  <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                  <AlertTriangle className="w-5 h-5 text-yellow-500" />
                 </div>
 
-                <div className="p-4 bg-purple-950/30 border border-purple-800/40 rounded-2xl flex items-center justify-between">
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl flex items-center justify-between">
                   <div>
-                    <div className="text-[10px] text-purple-400 font-bold uppercase">PENDING RETURNS</div>
-                    <div className="text-xl font-black text-white mt-1">{pendingReturnsCount} claims</div>
+                    <div className="text-[10px] text-purple-700 font-bold uppercase">Pending Returns</div>
+                    <div className="text-xl font-black text-slate-900 mt-1">{pendingReturnsCount} claims</div>
                   </div>
-                  <RotateCcw className="w-5 h-5 text-purple-400" />
+                  <RotateCcw className="w-5 h-5 text-purple-500" />
                 </div>
               </div>
             </div>
@@ -1316,73 +1603,70 @@ export default function CrownAdminControlTower() {
 
           {/* 3. SALES & MARKDOWNS CONTROL ENGINE */}
           {activeTab === 'sales' && (
-            <div className="space-y-6 font-mono text-xs">
-              <div className="bg-[#141414] p-6 rounded-2xl border border-white/10">
-                <h3 className="text-sm font-bold uppercase text-white mb-2">Clearance & Discount Controls</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Toggle promotional markdowns on or off instantly. Applying a sale will update <span className="text-[#CCFF00]">sale_price</span>, render dynamic discount tags on product cards, and automatically surface items inside the customer-facing Sales tab.
+            <div className="space-y-6 text-xs">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-bold uppercase text-slate-900 mb-2">Clearance & Discount Controls</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Set a real sale price per product below. Applying a sale updates <span className="text-blue-600 font-semibold">sale_price</span> on that exact product, shows the markdown on its product card, and surfaces it in the customer-facing Sales tab.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {products.map(p => {
                   const isOnSale = p.is_on_sale || (p.sale_price && Number(p.sale_price) < Number(p.base_price));
-                  const discountPct = isOnSale && p.sale_price ? Math.round(((Number(p.base_price) - Number(p.sale_price)) / Number(p.base_price)) * 100) : 20;
+                  const discountPct = isOnSale && p.sale_price ? Math.round(((Number(p.base_price) - Number(p.sale_price)) / Number(p.base_price)) * 100) : 0;
                   const img = p.product_images?.[0]?.url;
 
                   return (
-                    <div key={p.id} className="bg-[#141414] p-5 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4">
+                    <div key={p.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
                       <div className="flex items-center gap-3">
                         {img ? (
                           <img
                             src={img}
                             alt={p.name}
-                            className="w-14 h-14 object-contain bg-black/40 rounded-xl p-1 border border-white/10 shrink-0"
+                            className="w-14 h-14 object-contain bg-slate-50 rounded-xl p-1 border border-slate-200 shrink-0"
                           />
                         ) : (
-                          <div className="w-14 h-14 flex items-center justify-center bg-black/60 border border-white/10 rounded-xl text-gray-500 shrink-0">
+                          <div className="w-14 h-14 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400 shrink-0">
                             <ImageIcon className="w-6 h-6" />
                           </div>
                         )}
                         <div>
-                          <div className="font-bold text-white text-xs font-sans">{p.name}</div>
-                          <div className="text-[10px] text-gray-500 uppercase">{p.department} // {p.primary_category}</div>
+                          <div className="font-bold text-slate-900 text-xs">{p.name}</div>
+                          <div className="text-[10px] text-slate-400 uppercase">{p.department} // {p.primary_category}</div>
                           <div className="text-xs font-bold mt-1">
-                            Base: <span className="text-white">${p.base_price}</span>
+                            Base: <span className="text-slate-900">${p.base_price}</span>
                             {isOnSale && (
-                              <span className="text-red-400 ml-2">Sale: ${p.sale_price} (-{discountPct}%)</span>
+                              <span className="text-red-600 ml-2">Sale: ${p.sale_price} (-{discountPct}%)</span>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="pt-3 border-t border-white/5 flex gap-2">
+                      <div className="pt-3 border-t border-slate-100">
                         {isOnSale ? (
                           <button
                             onClick={() => handleToggleSaleDiscount(p, false)}
-                            className="w-full py-2.5 bg-red-600/20 border border-red-500 text-red-300 font-bold text-[10px] uppercase rounded-xl hover:bg-red-600 hover:text-white transition-colors"
+                            className="w-full py-2.5 bg-red-50 border border-red-200 text-red-600 font-bold text-[10px] uppercase rounded-xl hover:bg-red-600 hover:text-white transition-colors"
                           >
                             Remove From Sale
                           </button>
                         ) : (
                           <div className="flex gap-2 w-full">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder={`Sale price (< $${p.base_price})`}
+                              value={saleInputs[p.id] || ''}
+                              onChange={(e) => setSaleInputs((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                              className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none focus:border-blue-500"
+                            />
                             <button
-                              onClick={() => handleToggleSaleDiscount(p, true, 20)}
-                              className="flex-1 py-2 bg-white/5 border border-white/10 text-white font-bold text-[10px] uppercase rounded-xl hover:bg-[#CCFF00] hover:text-black transition-all"
+                              onClick={() => handleSetCustomSalePrice(p)}
+                              className="px-4 py-2 bg-blue-600 text-white font-bold text-[10px] uppercase rounded-xl hover:bg-blue-700 transition-colors shrink-0"
                             >
-                              +20% OFF
-                            </button>
-                            <button
-                              onClick={() => handleToggleSaleDiscount(p, true, 30)}
-                              className="flex-1 py-2 bg-white/5 border border-white/10 text-white font-bold text-[10px] uppercase rounded-xl hover:bg-[#CCFF00] hover:text-black transition-all"
-                            >
-                              +30% OFF
-                            </button>
-                            <button
-                              onClick={() => handleToggleSaleDiscount(p, true, 50)}
-                              className="flex-1 py-2 bg-white/5 border border-white/10 text-white font-bold text-[10px] uppercase rounded-xl hover:bg-[#CCFF00] hover:text-black transition-all"
-                            >
-                              +50% OFF
+                              Apply Sale
                             </button>
                           </div>
                         )}
@@ -1431,16 +1715,49 @@ export default function CrownAdminControlTower() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-gray-400 block mb-1 uppercase">Specific Activity / Discipline *</label>
+                      <label className="text-gray-400 block mb-1 uppercase">Specific Activity / Division *</label>
                       <select value={wizActivity} onChange={(e) => setWizActivity(e.target.value)} className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none">
-                        {(ACTIVITY_PRESETS[wizPrimaryCat] || []).map((act) => (
-                          <option key={act} value={act}>{act}</option>
+                        {getDivisionsForCategory(wizPrimaryCat).length === 0 && <option value="">No divisions yet — add one below</option>}
+                        {getDivisionsForCategory(wizPrimaryCat).map((d) => (
+                          <option key={d.id} value={d.name}>{d.name}</option>
                         ))}
                       </select>
                     </div>
                     <div>
                       <label className="text-gray-400 block mb-1 uppercase">Product Name *</label>
                       <input type="text" value={wizName} onChange={(e) => setWizName(e.target.value)} placeholder="e.g. Air Max Alpha Matrix" className="w-full p-3 bg-black border border-white/10 rounded-xl font-bold text-white outline-none" />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-black/40 border border-white/10 rounded-xl space-y-2">
+                    <label className="text-gray-400 block uppercase text-[10px]">
+                      Manage "{wizPrimaryCat}" Divisions <span className="normal-case text-gray-600">(shared across every department)</span>
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {getDivisionsForCategory(wizPrimaryCat).map((d) => (
+                        <span key={d.id} className="flex items-center gap-1 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] text-gray-300">
+                          {d.name}
+                          <button type="button" onClick={() => handleDeleteDivision(d)} className="text-gray-500 hover:text-red-400">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                      {getDivisionsForCategory(wizPrimaryCat).length === 0 && (
+                        <span className="text-gray-600 text-[10px]">No divisions for this category yet.</span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newDivisionName}
+                        onChange={(e) => setNewDivisionName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDivision(wizPrimaryCat); } }}
+                        placeholder="e.g. Yoga & Recovery"
+                        className="flex-1 p-2 bg-black border border-white/10 rounded-lg text-[11px] text-white outline-none"
+                      />
+                      <button type="button" onClick={() => handleAddDivision(wizPrimaryCat)} className="px-3 py-2 bg-[#CCFF00] text-black font-bold text-[10px] uppercase rounded-lg">
+                        Add Division
+                      </button>
                     </div>
                   </div>
 
@@ -1703,157 +2020,374 @@ export default function CrownAdminControlTower() {
 
           {/* 5. CATEGORIES & PERMANENT DROPS */}
           {activeTab === 'categories' && (
-            <div className="space-y-6 font-mono text-xs">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-base font-bold font-sans uppercase">Collections & Category Master</h3>
-                  <p className="text-gray-500 text-[11px]">Curate seasonal drops and categories directly in database.</p>
-                </div>
+            <div className="space-y-6 text-xs">
+              <div>
+                <h3 className="text-base font-bold uppercase text-slate-900">Collections & Drops</h3>
+                <p className="text-slate-500 text-[11px] mt-1">
+                  Group products into a themed drop (e.g. "Winter Apex 2026"). Published collections with at least one product show up on your storefront at /collections/[slug].
+                </p>
               </div>
 
-              <div className="p-6 bg-[#141414] border border-white/10 rounded-2xl space-y-4">
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    placeholder="New Collection Name (e.g. Winter Apex 2026)..."
-                    value={newCollectionTitle}
-                    onChange={(e) => setNewCollectionTitle(e.target.value)}
-                    className="flex-1 p-3 bg-black border border-white/10 rounded-xl text-white outline-none"
-                  />
-                  <button
-                    onClick={async () => {
-                      if (!newCollectionTitle) return;
-                      const slug = newCollectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-                      await supabase.from('collections').insert([{ name: newCollectionTitle, slug, is_published: true }]);
-                      setNewCollectionTitle('');
-                      refreshAll();
-                    }}
-                    className="px-6 py-3 bg-[#CCFF00] text-black font-bold uppercase rounded-xl"
-                  >
-                    + Create Collection
-                  </button>
-                </div>
+              <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-3">
+                <input
+                  type="text"
+                  placeholder="Collection Name (e.g. Winter Apex 2026)..."
+                  value={newCollectionTitle}
+                  onChange={(e) => setNewCollectionTitle(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none focus:border-blue-500"
+                />
+                <textarea
+                  placeholder="Short description shown on the collection page (optional)"
+                  value={newCollectionDesc}
+                  onChange={(e) => setNewCollectionDesc(e.target.value)}
+                  rows={2}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none focus:border-blue-500 resize-none"
+                />
+                <button
+                  onClick={async () => {
+                    if (!newCollectionTitle.trim()) return;
+                    const slug = newCollectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                    await supabase.from('collections').insert([{ name: newCollectionTitle, slug, description: newCollectionDesc || null, is_published: true }]);
+                    setNewCollectionTitle('');
+                    setNewCollectionDesc('');
+                    refreshAll();
+                  }}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase rounded-xl transition-colors"
+                >
+                  + Create Collection
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {customCollections.map(c => (
-                  <div key={c.id} className="p-5 bg-[#141414] border border-white/10 rounded-2xl flex flex-col justify-between">
-                    <div>
-                      <span className="text-[10px] text-[#CCFF00] uppercase font-bold">COLLECTION #{String(c.id).slice(0, 6)}</span>
-                      <h4 className="text-sm font-bold text-white mt-1 font-sans">{c.name}</h4>
-                      <p className="text-gray-500 mt-1">{c.collection_products?.[0]?.count || 0} curated items</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {customCollections.map(c => {
+                  const itemCount = c.collection_products?.[0]?.count ?? c.collection_products?.length ?? 0;
+                  return (
+                    <div key={c.id} className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">{c.name}</h4>
+                        {c.description && <p className="text-slate-400 text-[11px] mt-1">{c.description}</p>}
+                        <p className="text-slate-500 mt-2 font-semibold">{itemCount} product{itemCount === 1 ? '' : 's'}</p>
+                      </div>
+                      <div className="space-y-2 pt-4 mt-4 border-t border-slate-100">
+                        <div className="flex justify-between items-center">
+                          <button
+                            onClick={() => handleTogglePublishCollection(c)}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${c.is_published ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}
+                          >
+                            {c.is_published ? 'Published' : 'Draft'}
+                          </button>
+                          <button onClick={async () => { if (confirm(`Delete "${c.name}"?`)) { await supabase.from('collections').delete().eq('id', c.id); refreshAll(); } }} className="text-slate-400 hover:text-red-500">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => openManageCollection(c)}
+                          className="w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-xl transition-colors"
+                        >
+                          Manage Products
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center pt-4 mt-4 border-t border-white/10">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${c.is_published ? 'bg-emerald-950 text-emerald-400' : 'bg-gray-800 text-gray-400'}`}>
-                        {c.is_published ? 'Published' : 'Draft'}
-                      </span>
-                      <button onClick={async () => { await supabase.from('collections').delete().eq('id', c.id); refreshAll(); }} className="text-gray-500 hover:text-red-400">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+                {customCollections.length === 0 && (
+                  <p className="text-slate-400 col-span-full text-center py-6">No collections yet — create one above.</p>
+                )}
               </div>
             </div>
           )}
 
           {/* 6. FOUR-PILLAR INVENTORY ENGINE */}
           {activeTab === 'inventory' && (
-            <div className="space-y-6 font-mono text-xs">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-base font-bold font-sans uppercase">Four-Pillar Inventory Matrix</h3>
-                  <p className="text-gray-500 text-[11px]">Available = Total On-Hand - Reserved - Damaged</p>
+            <div className="space-y-6 text-xs">
+              <div>
+                <h3 className="text-base font-bold uppercase text-slate-900">Inventory</h3>
+                <p className="text-slate-500 text-[11px] mt-1">Available = Total On-Hand − Reserved − Damaged</p>
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {[
+                  { id: 'stock', label: 'In Stock' },
+                  { id: 'decrease', label: 'Stock Decreases' },
+                  { id: 'customers', label: 'Customer Requests' },
+                  { id: 'remaining', label: 'Remaining Stock' },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setInventorySubTab(t.id)}
+                    className={`px-4 py-2 rounded-xl font-bold uppercase text-[11px] shrink-0 transition-colors ${
+                      inventorySubTab === t.id ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                <select
+                  value={invDeptFilter}
+                  onChange={(e) => setInvDeptFilter(e.target.value)}
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 font-bold uppercase text-[11px] outline-none focus:border-blue-500"
+                >
+                  <option value="all">All Departments</option>
+                  <option value="men">Men</option>
+                  <option value="women">Women</option>
+                  <option value="kids">Kids</option>
+                  <option value="sports">Sports</option>
+                </select>
+                <select
+                  value={invCategoryFilter}
+                  onChange={(e) => { setInvCategoryFilter(e.target.value); setInvActivityFilter('all'); }}
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 font-bold uppercase text-[11px] outline-none focus:border-blue-500"
+                >
+                  <option value="all">All Sub-Departments</option>
+                  <option value="shoes">Shoes</option>
+                  <option value="clothing">Clothing</option>
+                  <option value="accessories">Accessories</option>
+                </select>
+                <select
+                  value={invActivityFilter}
+                  onChange={(e) => setInvActivityFilter(e.target.value)}
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 font-bold uppercase text-[11px] outline-none focus:border-blue-500"
+                >
+                  <option value="all">All Divisions</option>
+                  {invActivityOptions.map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+                {(invDeptFilter !== 'all' || invCategoryFilter !== 'all' || invActivityFilter !== 'all') && (
+                  <button
+                    onClick={() => { setInvDeptFilter('all'); setInvCategoryFilter('all'); setInvActivityFilter('all'); }}
+                    className="px-3 py-2 text-slate-400 hover:text-slate-900 font-bold uppercase text-[11px]"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+
+              {/* SUB-TAB 1: IN STOCK */}
+              {inventorySubTab === 'stock' && (
+                <div className="space-y-4">
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => exportCSV(filteredInventory, 'in-stock')} className="px-3.5 py-1.5 bg-white border border-slate-200 rounded-lg font-bold flex items-center gap-1.5 text-slate-700 hover:bg-slate-50">
+                      <Download className="w-3.5 h-3.5 text-blue-600" /> CSV
+                    </button>
+                    <button
+                      onClick={() => generatePdfReport(
+                        'In Stock Report',
+                        ['Product', 'SKU', 'Color/Size', 'On Hand'],
+                        filteredInventory.map(v => [v.products?.name || 'Unknown', v.sku || '—', `${v.color || '—'} / ${v.size || '—'}`, Number(v.stock || 0)])
+                      )}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> PDF Report
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredInventory.map((v) => {
+                      const onHand = Number(v.stock || 0);
+                      const img = v.products?.product_images?.[0]?.url;
+                      const stockClass = onHand <= 0 ? 'text-red-600' : onHand <= 5 ? 'text-amber-600' : 'text-slate-900';
+                      return (
+                        <div key={v.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-3">
+                          {img ? (
+                            <img src={img} className="w-12 h-12 object-contain bg-slate-50 rounded-xl border border-slate-200 p-1 shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400 shrink-0">
+                              <ImageIcon className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 truncate">{v.products?.name || 'Unknown Product'}</div>
+                            <div className="text-[10px] text-slate-400">{v.sku} • {v.color || '—'} / {v.size || '—'}</div>
+                            <div className="flex items-center justify-between mt-1.5">
+                              <span className={`text-lg font-black ${stockClass}`}>{onHand} <span className="text-[10px] font-bold text-slate-400 uppercase">on hand</span></span>
+                              <div className="space-x-1">
+                                <button onClick={async () => { await adjustInventoryStock(v.id, -1, 'Console Deduction'); refreshAll(); }} className="px-2 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded font-bold">-1</button>
+                                <button onClick={async () => { await adjustInventoryStock(v.id, 5, 'Warehouse Restock'); refreshAll(); }} className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded">+5</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredInventory.length === 0 && <p className="text-slate-400 col-span-full text-center py-6">No variants match this filter.</p>}
+                  </div>
                 </div>
-                <button onClick={() => exportCSV(inventory, 'inventory-four-pillar')} className="px-3.5 py-1.5 bg-white/5 border border-white/10 rounded-lg font-bold flex items-center gap-1.5">
-                  <Download className="w-3.5 h-3.5 text-[#CCFF00]" /> Export Inventory CSV
-                </button>
-              </div>
+              )}
 
-              <div className="bg-[#141414] border border-white/10 rounded-2xl overflow-hidden">
-                <table className="w-full text-left">
-                  <thead className="bg-black/50 border-b border-white/10 uppercase text-gray-500 text-[10px]">
-                    <tr>
-                      <th className="p-4">Product</th>
-                      <th className="p-4">Spec</th>
-                      <th className="p-4 text-[#CCFF00]">Available</th>
-                      <th className="p-4 text-amber-400">Reserved</th>
-                      <th className="p-4 text-red-400">Damaged</th>
-                      <th className="p-4">Total On Hand</th>
-                      <th className="p-4 text-right">Quick Restock</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {[...inventory]
-                      .sort((a, b) => {
-                        const nameA = a.products?.name || '';
-                        const nameB = b.products?.name || '';
-                        if (nameA !== nameB) return nameA.localeCompare(nameB);
-                        return (a.stock || 0) - (b.stock || 0);
-                      })
-                      .map((v, idx, sorted) => {
-                        const onHand = Number(v.stock || 0);
-                        const reserved = Number(v.reserved_stock || 0);
-                        const damaged = Number(v.damaged_stock || 0);
-                        const available = Math.max(0, onHand - reserved - damaged);
-                        const isNewProduct = idx === 0 || v.product_id !== sorted[idx - 1]?.product_id;
-                        const img = v.products?.product_images?.[0]?.url;
-                        const stockClass = available <= 0 ? 'text-red-400' : available <= 5 ? 'text-amber-400' : 'text-[#CCFF00]';
+              {/* SUB-TAB 2: STOCK DECREASES */}
+              {inventorySubTab === 'decrease' && (
+                <div className="space-y-4">
+                  {(() => {
+                    const decreases = filteredInventoryLogs.filter(l => Number(l.change_amount) < 0);
+                    return (
+                      <>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => generatePdfReport(
+                              'Stock Decrease Report',
+                              ['Product', 'Variant', 'Change', 'Reason', 'Date'],
+                              decreases.map(l => [
+                                l.product_variants?.products?.name || 'Unknown',
+                                `${l.product_variants?.color || '—'} / ${l.product_variants?.size || '—'}`,
+                                l.change_amount,
+                                l.reason || '—',
+                                new Date(l.created_at).toLocaleString(),
+                              ])
+                            )}
+                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5"
+                          >
+                            <FileText className="w-3.5 h-3.5" /> PDF Report
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {decreases.map((l) => (
+                            <div key={l.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                              <div className="font-bold text-slate-900">{l.product_variants?.products?.name || 'Unknown Product'}</div>
+                              <div className="text-[10px] text-slate-400">{l.product_variants?.sku} • {l.product_variants?.color || '—'} / {l.product_variants?.size || '—'}</div>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-lg font-black text-red-600">{l.change_amount}</span>
+                                <span className="text-[10px] text-slate-400">{new Date(l.created_at).toLocaleDateString()}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-1">{l.reason || 'No reason recorded'}</div>
+                            </div>
+                          ))}
+                          {decreases.length === 0 && <p className="text-slate-400 col-span-full text-center py-6">No stock decreases recorded yet.</p>}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
-                        return (
-                          <tr key={v.id} className={`hover:bg-white/5 ${isNewProduct && idx > 0 ? 'border-t-2 border-t-white/10' : ''}`}>
-                            <td className="p-4">
-                              {isNewProduct ? (
-                                <div className="flex items-center gap-3">
-                                  {img ? (
-                                    <img src={img} className="w-10 h-10 object-contain bg-black rounded-lg border border-white/10 p-1 shrink-0" />
-                                  ) : (
-                                    <div className="w-10 h-10 flex items-center justify-center bg-black/60 border border-white/10 rounded-lg text-gray-500 shrink-0">
-                                      <ImageIcon className="w-5 h-5" />
-                                    </div>
-                                  )}
-                                  <div>
-                                    <span className="font-bold text-white block">{v.products?.name || 'Unknown Product'}</span>
-                                    <span className="text-[10px] text-gray-500">{v.sku}</span>
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-[10px] text-gray-500 pl-[52px] block">{v.sku}</span>
-                              )}
-                            </td>
-                            <td className="p-4 text-gray-300">{v.color} / {v.size}</td>
-                            <td className={`p-4 font-black ${stockClass}`}>{available}</td>
-                            <td className="p-4 text-amber-400 font-bold">{reserved}</td>
-                            <td className="p-4 text-red-400 font-bold">{damaged}</td>
-                            <td className="p-4 font-bold text-white">{onHand} UNITS</td>
-                            <td className="p-4 text-right space-x-1.5">
-                              <button onClick={async () => { await adjustInventoryStock(v.id, -1, 'Console Deduction'); refreshAll(); }} className="px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded font-bold">-1</button>
-                              <button onClick={async () => { await adjustInventoryStock(v.id, 5, 'Warehouse Restock'); refreshAll(); }} className="px-2.5 py-1 bg-[#CCFF00] text-black font-bold rounded">+5</button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
+              {/* SUB-TAB 3: CUSTOMER REQUESTS */}
+              {inventorySubTab === 'customers' && (
+                <div className="space-y-4">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => generatePdfReport(
+                        'Customer Requests Report',
+                        ['Product', 'Customer', 'Email', 'Qty', 'Order #', 'Date'],
+                        filteredOrderItemsWithCustomers.map(r => [
+                          `${r.productName} (${r.color || '—'}/${r.size || '—'})`,
+                          r.customerName,
+                          r.customerEmail,
+                          r.quantity,
+                          r.orderNumber || '—',
+                          new Date(r.orderDate).toLocaleString(),
+                        ])
+                      )}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> PDF Report
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredOrderItemsWithCustomers.map((r, idx) => (
+                      <div key={`${r.orderId}-${idx}`} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                        <div className="font-bold text-slate-900">{r.productName}</div>
+                        <div className="text-[10px] text-slate-400">{r.color || '—'} / {r.size || '—'} • Qty {r.quantity}</div>
+                        <div className="mt-2 text-slate-700 font-semibold">{r.customerName}</div>
+                        <div className="text-[10px] text-slate-400 truncate">{r.customerEmail}</div>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[10px] font-mono text-blue-600">{r.orderNumber}</span>
+                          <span className="text-[10px] text-slate-400">{new Date(r.orderDate).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {filteredOrderItemsWithCustomers.length === 0 && <p className="text-slate-400 col-span-full text-center py-6">No orders match this filter.</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-TAB 4: REMAINING STOCK */}
+              {inventorySubTab === 'remaining' && (
+                <div className="space-y-4">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => generatePdfReport(
+                        'Remaining Stock Report',
+                        ['Product', 'Variant', 'On Hand', 'Reserved', 'Damaged', 'Remaining'],
+                        filteredInventory.map(v => {
+                          const onHand = Number(v.stock || 0);
+                          const reserved = Number(v.reserved_stock || 0);
+                          const damaged = Number(v.damaged_stock || 0);
+                          return [v.products?.name || 'Unknown', `${v.color || '—'} / ${v.size || '—'}`, onHand, reserved, damaged, Math.max(0, onHand - reserved - damaged)];
+                        })
+                      )}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> PDF Report
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredInventory.map((v) => {
+                      const onHand = Number(v.stock || 0);
+                      const reserved = Number(v.reserved_stock || 0);
+                      const damaged = Number(v.damaged_stock || 0);
+                      const remaining = Math.max(0, onHand - reserved - damaged);
+                      const remainingClass = remaining <= 0 ? 'text-red-600' : remaining <= 5 ? 'text-amber-600' : 'text-emerald-600';
+                      return (
+                        <div key={v.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                          <div className="font-bold text-slate-900">{v.products?.name || 'Unknown Product'}</div>
+                          <div className="text-[10px] text-slate-400">{v.sku} • {v.color || '—'} / {v.size || '—'}</div>
+                          <div className={`text-2xl font-black mt-1 ${remainingClass}`}>{remaining}</div>
+                          <div className="grid grid-cols-3 gap-2 mt-2 text-[10px]">
+                            <div><span className="text-slate-400 block">On Hand</span><span className="font-bold text-slate-900">{onHand}</span></div>
+                            <div><span className="text-slate-400 block">Reserved</span><span className="font-bold text-amber-600">{reserved}</span></div>
+                            <div><span className="text-slate-400 block">Damaged</span><span className="font-bold text-red-600">{damaged}</span></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredInventory.length === 0 && <p className="text-slate-400 col-span-full text-center py-6">No variants match this filter.</p>}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* 7. ORDERS & LOGISTICS (CARDS VIEW WITH LIVE IMAGES & SHIPPING INPUTS) */}
           {activeTab === 'orders' && (
-            <div className="space-y-6 font-mono text-xs">
-              <div className="flex justify-between items-center">
+            <div className="space-y-6 text-xs">
+              <div className="flex justify-between items-center flex-wrap gap-3">
                 <div>
-                  <h3 className="text-base font-bold font-sans uppercase">Orders & Vehicle Logistics</h3>
-                  <p className="text-gray-500 text-[11px]">10-Stage status control, carrier tracking inputs, Stripe payment logs, and printable invoices[cite: 2, 3].</p>
+                  <h3 className="text-base font-bold uppercase text-slate-900">Orders & Deliveries</h3>
+                  <p className="text-slate-500 text-[11px] mt-1">Filter by payment status, review full line items, and generate professional invoices.</p>
                 </div>
-                <button onClick={() => exportCSV(orders, 'orders-ledger')} className="px-3.5 py-1.5 bg-white/5 border border-white/10 rounded-lg font-bold flex items-center gap-1.5">
-                  <Download className="w-3.5 h-3.5 text-[#CCFF00]" /> Export Orders CSV[cite: 3]
+                <button onClick={() => exportCSV(orders, 'orders-ledger')} className="px-3.5 py-1.5 bg-white border border-slate-200 rounded-lg font-bold flex items-center gap-1.5 text-slate-700 hover:bg-slate-50">
+                  <Download className="w-3.5 h-3.5 text-blue-600" /> Export CSV
                 </button>
               </div>
 
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {[
+                  { id: 'all', label: 'All Orders' },
+                  { id: 'paid', label: 'Paid' },
+                  { id: 'pending', label: 'Pending' },
+                  { id: 'failed', label: 'Failed' },
+                ].map((f) => {
+                  const count = f.id === 'all' ? orders.length : orders.filter(o => (o.payment_status || 'pending') === f.id).length;
+                  return (
+                    <button
+                      key={f.id}
+                      onClick={() => setOrderPaymentFilter(f.id)}
+                      className={`px-4 py-2 rounded-xl font-bold uppercase text-[11px] shrink-0 transition-colors ${
+                        orderPaymentFilter === f.id ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {f.label} <span className="opacity-70">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {orders.map(o => {
+                {orders
+                  .filter(o => orderPaymentFilter === 'all' || (o.payment_status || 'pending') === orderPaymentFilter)
+                  .map(o => {
                   const rawAddr = o.shipping_address || {};
                   const addr = {
                     recipient_name: rawAddr.recipient_name || rawAddr.name,
@@ -1863,76 +2397,96 @@ export default function CrownAdminControlTower() {
                     phone: rawAddr.phone,
                     email: rawAddr.email,
                   };
-                  const firstItem = o.order_items?.[0];
-                  const itemImg = getOrderItemImage(firstItem);
+                  const items = o.order_items || [];
 
                   return (
-                    <div key={o.id} className="bg-[#141414] border border-white/10 rounded-3xl p-6 flex flex-col justify-between hover:border-white/30 transition-all shadow-xl space-y-4">
+                    <div key={o.id} className="bg-white border border-slate-200 rounded-3xl p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow space-y-4">
                       <div className="space-y-4">
                         <div className="flex justify-between items-start">
                           <div>
-                            <span className="text-[9px] text-gray-500 uppercase font-bold">ORDER CODE</span>
-                            <div className="text-sm font-black text-white">{o.order_number || String(o.id).slice(0, 8)}</div>
+                            <span className="text-[9px] text-slate-400 uppercase font-bold">Order</span>
+                            <div className="text-sm font-black text-slate-900">{o.order_number || String(o.id).slice(0, 8)}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">{o.created_at ? new Date(o.created_at).toLocaleString() : '—'}</div>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-[9px] uppercase font-bold text-[#CCFF00]">
+                            <span className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-full text-[9px] uppercase font-bold text-slate-600">
                               {o.status || 'processing'}
                             </span>
-                            <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase font-bold ${
-                              o.payment_status === 'paid' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            <span className={`px-2 py-0.5 rounded text-[8px] uppercase font-bold border ${
+                              o.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                              o.payment_status === 'failed' ? 'bg-red-50 text-red-600 border-red-200' :
+                              'bg-amber-50 text-amber-600 border-amber-200'
                             }`}>
-                              {o.payment_status || 'unpaid'}
+                              {o.payment_status || 'pending'}
                             </span>
                           </div>
                         </div>
 
-                        {/* Real Ordered Item Join */}
-                        <div className="flex items-center gap-3 bg-black/50 p-3 rounded-2xl border border-white/5">
-                          {itemImg ? (
-                            <img src={itemImg} alt="Ordered Item" className="w-12 h-12 object-contain bg-black rounded-xl p-1 border border-white/10 shrink-0" />
-                          ) : (
-                            <div className="w-12 h-12 flex items-center justify-center bg-black rounded-xl p-1 border border-white/10 text-gray-500 shrink-0">
-                              <ImageIcon className="w-6 h-6" />
-                            </div>
+                        {/* Full Line Items — every product in the order, not just the first */}
+                        <div className="bg-slate-50 rounded-2xl border border-slate-100 divide-y divide-slate-200">
+                          {items.length === 0 && (
+                            <div className="p-3 text-slate-400 text-[11px]">No line items recorded.</div>
                           )}
-                          <div className="overflow-hidden">
-                            <div className="font-bold text-white text-xs truncate">{addr.recipient_name || 'Athlete'}</div>
-                            <div className="text-[10px] text-gray-400 truncate">{firstItem?.product_name || 'Equipment Gear'} (x{firstItem?.quantity || 1})</div>
-                            <div className="text-[#CCFF00] font-black mt-0.5">${Number(o.total_amount ?? o.total ?? 0).toFixed(2)}</div>
+                          {items.map((item, idx) => {
+                            const img = getOrderItemImage(item);
+                            const name = item.product_name || item.product_variants?.products?.name || 'Item';
+                            const qty = item.quantity || 1;
+                            const unit = Number(item.unit_price || 0);
+                            return (
+                              <div key={idx} className="flex items-center gap-3 p-3">
+                                {img ? (
+                                  <img src={img} alt={name} className="w-10 h-10 object-contain bg-white rounded-xl p-1 border border-slate-200 shrink-0" />
+                                ) : (
+                                  <div className="w-10 h-10 flex items-center justify-center bg-white rounded-xl p-1 border border-slate-200 text-slate-400 shrink-0">
+                                    <ImageIcon className="w-5 h-5" />
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-bold text-slate-900 text-[11px] truncate">{name}</div>
+                                  <div className="text-[10px] text-slate-400">{item.color || item.product_variants?.color || '—'} / {item.size || item.product_variants?.size || '—'} • Qty {qty}</div>
+                                </div>
+                                <div className="text-slate-900 font-bold text-[11px] shrink-0">${(unit * qty).toFixed(2)}</div>
+                              </div>
+                            );
+                          })}
+                          <div className="flex justify-between items-center p-3 bg-slate-100 rounded-b-2xl">
+                            <span className="text-[10px] font-bold uppercase text-slate-500">Order Total</span>
+                            <span className="text-blue-600 font-black">${Number(o.total_amount ?? o.total ?? 0).toFixed(2)}</span>
                           </div>
                         </div>
 
                         {/* Recipient Details */}
-                        <div className="p-3 bg-black/30 border border-white/5 rounded-2xl text-[11px] space-y-1.5">
-                          <div className="text-gray-400 flex items-start gap-1.5">
-                            <Phone className="w-3.5 h-3.5 text-gray-500 shrink-0 mt-0.5" />
+                        <div className="p-3 bg-white border border-slate-200 rounded-2xl text-[11px] space-y-1.5">
+                          <div className="font-bold text-slate-900">{addr.recipient_name || 'Guest'}</div>
+                          <div className="text-slate-500 flex items-start gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                             <span className="break-all">{addr.phone || 'No phone on file'}</span>
                           </div>
-                          <div className="text-gray-400 flex items-start gap-1.5">
-                            <Mail className="w-3.5 h-3.5 text-gray-500 shrink-0 mt-0.5" />
+                          <div className="text-slate-500 flex items-start gap-1.5">
+                            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                             <span className="break-all">{o.guest_email || addr.email || 'No email on file'}</span>
                           </div>
-                          <div className="text-gray-400 flex items-start gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-[#CCFF00] shrink-0 mt-0.5" />
+                          <div className="text-slate-500 flex items-start gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
                             <span className="break-words">{addr.street || 'No address on file'}{addr.city ? `, ${addr.city}` : ''} {addr.postal_code && `• ${addr.postal_code}`}</span>
                           </div>
                         </div>
 
                         {/* Dispatch Carrier Inputs */}
                         <div className="space-y-1.5">
-                          <span className="text-[9px] text-gray-500 font-bold uppercase">Shipping Carrier & Tracking</span>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase">Shipping Carrier & Tracking</span>
                           <div className="flex gap-2">
                             <input
                               placeholder="Carrier"
                               defaultValue={o.shipping_carrier || ''}
                               id={`carrier-${o.id}`}
-                              className="w-1/2 p-2 bg-black border border-white/10 rounded-xl text-[10px] text-white outline-none"
+                              className="w-1/2 p-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] text-slate-900 outline-none focus:border-blue-500"
                             />
                             <input
                               placeholder="Tracking #"
                               defaultValue={o.tracking_number || ''}
                               id={`trk-${o.id}`}
-                              className="w-1/2 p-2 bg-black border border-white/10 rounded-xl text-[10px] text-white outline-none"
+                              className="w-1/2 p-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] text-slate-900 outline-none focus:border-blue-500"
                             />
                           </div>
                           <button
@@ -1941,7 +2495,7 @@ export default function CrownAdminControlTower() {
                               const tInput = document.getElementById(`trk-${o.id}`);
                               handleUpdateOrderShippingDetails(o.id, cInput?.value || 'Carrier', tInput?.value || 'TRK-000');
                             }}
-                            className="w-full py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[9px] font-bold uppercase text-gray-300"
+                            className="w-full py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-[9px] font-bold uppercase text-slate-600"
                           >
                             Save Carrier Info
                           </button>
@@ -1949,11 +2503,11 @@ export default function CrownAdminControlTower() {
                       </div>
 
                       {/* 10-Stage Fulfillment Control */}
-                      <div className="pt-4 border-t border-white/10 space-y-2">
+                      <div className="pt-4 border-t border-slate-100 space-y-2">
                         <select
                           value={o.status || 'processing'}
                           onChange={(e) => handleFulfillmentStageChange(o, e.target.value)}
-                          className="w-full p-2.5 bg-black border border-white/10 rounded-xl text-xs font-bold uppercase text-white outline-none"
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold uppercase text-slate-900 outline-none focus:border-blue-500"
                         >
                           <option value="pending">1. Pending</option>
                           <option value="paid">2. Paid</option>
@@ -1969,14 +2523,14 @@ export default function CrownAdminControlTower() {
 
                         <button
                           onClick={() => setSelectedOrderDetails(o)}
-                          className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-center font-bold uppercase text-white flex items-center justify-center gap-1.5 transition-all"
+                          className="w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-center font-bold uppercase text-slate-700 flex items-center justify-center gap-1.5 transition-all"
                         >
-                          <FileText className="w-3.5 h-3.5 text-[#CCFF00]" /> Full Invoice & Audit
+                          <FileText className="w-3.5 h-3.5 text-blue-600" /> View Invoice
                         </button>
 
                         <button
                           onClick={() => handleDeleteOrder(o)}
-                          className="w-full py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 rounded-xl text-center font-bold uppercase text-red-300 flex items-center justify-center gap-1.5 transition-all"
+                          className="w-full py-2 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl text-center font-bold uppercase text-red-600 flex items-center justify-center gap-1.5 transition-all"
                         >
                           <Trash2 className="w-3.5 h-3.5" /> Delete Order
                         </button>
@@ -1984,75 +2538,102 @@ export default function CrownAdminControlTower() {
                     </div>
                   );
                 })}
+                {orders.filter(o => orderPaymentFilter === 'all' || (o.payment_status || 'pending') === orderPaymentFilter).length === 0 && (
+                  <p className="text-slate-400 col-span-full text-center py-10">No orders in this view.</p>
+                )}
               </div>
             </div>
           )}
 
           {/* 8. 7-STAGE RETURNS DECISION MACHINE */}
           {activeTab === 'returns' && (
-            <div className="space-y-6 font-mono text-xs">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-base font-bold font-sans uppercase">7-Stage Returns & Inspection</h3>
-                  <p className="text-gray-500 text-[11px]">REQUESTED → APPROVED → RETURN SHIPPED → RECEIVED → INSPECTION → REFUND APPROVED → REFUNDED</p>
-                </div>
+            <div className="space-y-6 text-xs">
+              <div>
+                <h3 className="text-base font-bold uppercase text-slate-900">Returns & Inspection</h3>
+                <p className="text-slate-500 text-[11px] mt-1">Requested → Approved → Return Shipped → Received → Inspection → Refund Approved → Refunded</p>
               </div>
 
-              <div className="bg-[#141414] border border-white/10 rounded-2xl overflow-hidden">
-                <table className="w-full text-left">
-                  <thead className="bg-black/50 border-b border-white/10 uppercase text-gray-500 text-[10px]">
-                    <tr>
-                      <th className="p-4">Claim ID</th>
-                      <th className="p-4">Customer</th>
-                      <th className="p-4">Item Claimed</th>
-                      <th className="p-4">Reason</th>
-                      <th className="p-4">Current Stage</th>
-                      <th className="p-4 text-right">Stage Progression</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {returnsList.length === 0 ? (
-                      <tr><td colSpan={6} className="p-8 text-center text-gray-500">No active return requests on record.[cite: 3]</td></tr>
-                    ) : (
-                      returnsList.map(r => (
-                        <tr key={r.id} className="hover:bg-white/5">
-                          <td className="p-4 font-bold text-white">RET-{String(r.id).slice(0, 6)}</td>
-                          <td className="p-4 font-sans">{r.customer_name || 'Athlete'}<div className="text-[10px] text-gray-500">{r.customer_phone || '+1 (800) 555-0199'}</div></td>
-                          <td className="p-4">{r.product_name || 'Equipment'} ({r.variant_size || 'Std'})[cite: 3]</td>
-                          <td className="p-4 text-gray-400">{r.reason || 'Fit / Quality'}[cite: 3]</td>
-                          <td className="p-4">
-                            <span className="px-2 py-0.5 rounded text-[9px] uppercase font-bold bg-[#CCFF00]/10 border border-[#CCFF00]/30 text-[#CCFF00]">
-                              {r.status}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right space-x-2">
-                            <button
-                              onClick={() => setSelectedReturnDetails(r)}
-                              className="px-2.5 py-1 bg-white/10 hover:bg-white/20 rounded font-bold uppercase"
-                            >
-                              Inspect
-                            </button>
-                            <select
-                              value={r.status || 'requested'}
-                              onChange={async (e) => { await handleUpdateReturnStage(r.id, e.target.value); }}
-                              className="p-1 bg-black border border-white/10 rounded-lg text-xs font-bold uppercase text-white outline-none"
-                            >
-                              <option value="requested">1. Requested</option>
-                              <option value="approved">2. Approved</option>
-                              <option value="return_shipped">3. Return Shipped</option>
-                              <option value="received">4. Received</option>
-                              <option value="inspection">5. Inspection</option>
-                              <option value="refund_approved">6. Refund Approved</option>
-                              <option value="refunded">7. Refunded</option>
-                              <option value="rejected">X. Rejected</option>
-                            </select>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {returnsList.length === 0 ? (
+                <p className="text-slate-400 text-center py-10">No return requests on record.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {returnsList.map((r) => {
+                    const stageStyles = {
+                      requested: 'bg-slate-100 text-slate-600 border-slate-200',
+                      approved: 'bg-blue-50 text-blue-600 border-blue-200',
+                      return_shipped: 'bg-blue-50 text-blue-600 border-blue-200',
+                      received: 'bg-amber-50 text-amber-600 border-amber-200',
+                      inspection: 'bg-amber-50 text-amber-600 border-amber-200',
+                      refund_approved: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+                      refunded: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+                      rejected: 'bg-red-50 text-red-600 border-red-200',
+                    };
+                    const stage = r.status || 'requested';
+                    return (
+                      <div key={r.id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[9px] text-slate-400 uppercase font-bold">Claim</span>
+                            <div className="text-sm font-black text-slate-900">RET-{String(r.id).slice(0, 6)}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</div>
+                          </div>
+                          <span className={`px-2.5 py-1 rounded-full text-[9px] uppercase font-bold border ${stageStyles[stage] || stageStyles.requested}`}>
+                            {stage.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 space-y-1">
+                          <div className="font-bold text-slate-900">{r.product_name || 'Item'} {r.variant_size ? `(${r.variant_size})` : ''}</div>
+                          <div className="text-slate-500 text-[11px]">Qty {r.quantity || 1} • Order {r.orders?.order_number || r.order_number || 'N/A'}</div>
+                          <div className="text-slate-500 text-[11px]">Reason: <span className="text-slate-700 font-semibold">{r.reason || 'Not specified'}</span></div>
+                          {r.refund_amount ? (
+                            <div className="text-blue-600 font-bold">${Number(r.refund_amount).toFixed(2)} refund</div>
+                          ) : null}
+                        </div>
+
+                        <div className="text-[11px] space-y-1">
+                          <div className="font-bold text-slate-900">{r.customer_name || 'Customer'}</div>
+                          <div className="text-slate-500">{r.customer_email || 'No email on file'}</div>
+                          <div className="text-slate-500">{r.customer_phone || 'No phone provided'}</div>
+                        </div>
+
+                        {r.photos && r.photos.length > 0 && (
+                          <div className="flex gap-1.5 overflow-x-auto">
+                            {r.photos.map((url, i) => (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                                <img src={url} className="w-12 h-12 object-cover rounded-lg border border-slate-200" />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 pt-3 border-t border-slate-100">
+                          <button
+                            onClick={() => setSelectedReturnDetails(r)}
+                            className="flex-1 px-2.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg font-bold uppercase text-slate-700"
+                          >
+                            Inspect
+                          </button>
+                          <select
+                            value={r.status || 'requested'}
+                            onChange={async (e) => { await handleUpdateReturnStage(r.id, e.target.value); }}
+                            className="flex-1 p-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold uppercase text-slate-900 outline-none focus:border-blue-500"
+                          >
+                            <option value="requested">1. Requested</option>
+                            <option value="approved">2. Approved</option>
+                            <option value="return_shipped">3. Return Shipped</option>
+                            <option value="received">4. Received</option>
+                            <option value="inspection">5. Inspection</option>
+                            <option value="refund_approved">6. Refund Approved</option>
+                            <option value="refunded">7. Refunded</option>
+                            <option value="rejected">X. Rejected</option>
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -2671,55 +3252,92 @@ export default function CrownAdminControlTower() {
       {/* RETURN INSPECTION MODAL                                     */}
       {/* ─────────────────────────────────────────────────────────── */}
       {selectedReturnDetails && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-md">
-          <div className="bg-[#141414] max-w-lg w-full rounded-3xl border border-white/10 p-8 shadow-2xl relative font-mono text-xs space-y-4">
-            <div className="flex justify-between items-center border-b border-white/10 pb-4">
-              <span className="font-bold text-white uppercase">RETURN INSPECTION: RET-{String(selectedReturnDetails.id).slice(0, 6)}</span>
-              <button onClick={() => setSelectedReturnDetails(null)} className="text-gray-400 hover:text-white">
+        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white max-w-lg w-full rounded-3xl border border-slate-200 p-8 shadow-xl relative text-xs space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+              <span className="font-black text-slate-900 uppercase">Return Inspection: RET-{String(selectedReturnDetails.id).slice(0, 6)}</span>
+              <button onClick={() => setSelectedReturnDetails(null)} className="text-slate-400 hover:text-slate-900">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-3 bg-black/60 rounded-xl border border-white/5 space-y-1">
-              <div className="text-gray-500 text-[10px] uppercase font-bold">Athlete Return Details</div>
-              <div className="font-bold text-white">{selectedReturnDetails.customer_name || 'Athlete'}</div>
-              <div className="text-gray-400">{selectedReturnDetails.customer_phone || 'No phone recorded'}</div>
-              <div className="text-gray-400">Order Ref: {selectedReturnDetails.order_number || 'N/A'}</div>
-              <div className="text-gray-400">Reason: {selectedReturnDetails.reason || 'Fit / Sizing mismatch'}</div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <div className="text-slate-400 text-[10px] uppercase font-bold">Customer & Claim</div>
+              <div className="font-bold text-slate-900">{selectedReturnDetails.customer_name || 'Customer'}</div>
+              <div className="text-slate-500">{selectedReturnDetails.customer_email || 'No email on file'}</div>
+              <div className="text-slate-500">{selectedReturnDetails.customer_phone || 'No phone provided'}</div>
+              <div className="text-slate-500">Order Ref: {selectedReturnDetails.orders?.order_number || selectedReturnDetails.order_number || 'N/A'}</div>
+              <div className="text-slate-500">Item: {selectedReturnDetails.product_name || 'Item'} {selectedReturnDetails.variant_size ? `(${selectedReturnDetails.variant_size})` : ''} × {selectedReturnDetails.quantity || 1}</div>
+              <div className="text-slate-500">Reason: <span className="text-slate-900 font-semibold">{selectedReturnDetails.reason || 'Not specified'}</span></div>
+              <div className="text-slate-500">Return Method: {selectedReturnDetails.return_method || 'Not specified'} • {selectedReturnDetails.shipping_payer || 'Payer unspecified'}</div>
+              {selectedReturnDetails.refund_amount ? (
+                <div className="text-blue-600 font-bold">Refund: ${Number(selectedReturnDetails.refund_amount).toFixed(2)}</div>
+              ) : null}
             </div>
 
+            {selectedReturnDetails.details && (
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="text-slate-400 text-[10px] uppercase font-bold mb-1">Customer's Description</div>
+                <p className="text-slate-700">{selectedReturnDetails.details}</p>
+              </div>
+            )}
+
+            {selectedReturnDetails.photos && selectedReturnDetails.photos.length > 0 && (
+              <div>
+                <div className="text-slate-400 text-[10px] uppercase font-bold mb-1.5">Evidence Photos</div>
+                <div className="flex gap-2 flex-wrap">
+                  {selectedReturnDetails.photos.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                      <img src={url} className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
-              <label className="text-gray-400 uppercase block text-[10px]">Inspection / Assessment Notes</label>
+              <label className="text-slate-400 uppercase block text-[10px] font-bold">Inspection / Assessment Notes</label>
               <textarea
                 value={selectedReturnDetails.inspection_notes || ''}
                 onChange={(e) => setSelectedReturnDetails({ ...selectedReturnDetails, inspection_notes: e.target.value })}
                 placeholder="Enter quality control inspection notes..."
-                className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none h-20"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none focus:border-blue-500 h-20"
               />
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-white/10">
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200">
               <button
                 onClick={async () => {
-                  await handleUpdateReturnStage(selectedReturnDetails.id, { 
+                  await handleUpdateReturnStage(selectedReturnDetails.id, {
                     status: 'approved',
-                    inspection_notes: selectedReturnDetails.inspection_notes 
+                    inspection_notes: selectedReturnDetails.inspection_notes
                   });
                 }}
-                className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl font-bold uppercase"
+                className="py-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded-xl font-bold uppercase"
               >
-                Approve Return
+                Approve
               </button>
               <button
                 onClick={async () => {
-                  await handleUpdateReturnStage(selectedReturnDetails.id, { 
-                    status: 'refunded',
-                    inspection_notes: selectedReturnDetails.inspection_notes 
+                  await handleUpdateReturnStage(selectedReturnDetails.id, {
+                    status: 'rejected',
+                    inspection_notes: selectedReturnDetails.inspection_notes
                   });
                 }}
-                className="flex-1 py-2.5 bg-[#CCFF00] hover:bg-[#b8e600] text-black font-black uppercase rounded-xl"
+                className="py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl font-bold uppercase"
               >
-                Issue Refund
+                Reject
+              </button>
+              <button
+                onClick={async () => {
+                  await handleUpdateReturnStage(selectedReturnDetails.id, {
+                    status: 'refunded',
+                    inspection_notes: selectedReturnDetails.inspection_notes
+                  });
+                }}
+                className="py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase"
+              >
+                Refund
               </button>
             </div>
           </div>
@@ -2730,17 +3348,20 @@ export default function CrownAdminControlTower() {
       {/* ORDER AUDIT & INVOICE MODAL                                 */}
       {/* ─────────────────────────────────────────────────────────── */}
       {selectedOrderDetails && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-md">
-          <div className="bg-[#141414] max-w-lg w-full rounded-3xl border border-white/10 p-8 shadow-2xl relative font-mono text-xs space-y-4">
-            <div className="flex justify-between items-center border-b border-white/10 pb-4">
-              <span className="font-bold text-white uppercase">OFFICIAL INVOICE: {selectedOrderDetails.order_number || selectedOrderDetails.id.slice(0, 8)}</span>
-              <button onClick={() => setSelectedOrderDetails(null)} className="text-gray-400 hover:text-white">
+        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white max-w-lg w-full rounded-3xl border border-slate-200 p-8 shadow-xl relative text-xs space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">Invoice</span>
+                <span className="font-black text-slate-900 text-sm">{selectedOrderDetails.order_number || String(selectedOrderDetails.id).slice(0, 8)}</span>
+              </div>
+              <button onClick={() => setSelectedOrderDetails(null)} className="text-slate-400 hover:text-slate-900">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-3 bg-black/60 rounded-xl border border-white/5 space-y-1">
-              <div className="text-gray-500 text-[10px] uppercase font-bold">Recipient Dispatch Address</div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <div className="text-slate-400 text-[10px] uppercase font-bold">Bill To</div>
               {(() => {
                 const rawAddr = selectedOrderDetails.shipping_address || {};
                 const recipientName = rawAddr.recipient_name || rawAddr.name;
@@ -2748,10 +3369,10 @@ export default function CrownAdminControlTower() {
                 const postal = rawAddr.postal_code || rawAddr.postalCode;
                 return (
                   <>
-                    <div className="font-bold text-white">{recipientName || 'Customer'}</div>
-                    <div className="text-gray-400">{selectedOrderDetails.guest_email || rawAddr.email || 'No email recorded'}</div>
-                    <div className="text-gray-400">{rawAddr.phone || 'No phone recorded'}</div>
-                    <div className="text-[#CCFF00]">
+                    <div className="font-bold text-slate-900">{recipientName || 'Customer'}</div>
+                    <div className="text-slate-500">{selectedOrderDetails.guest_email || rawAddr.email || 'No email recorded'}</div>
+                    <div className="text-slate-500">{rawAddr.phone || 'No phone recorded'}</div>
+                    <div className="text-slate-700">
                       {street || 'No address on file'}{rawAddr.city ? `, ${rawAddr.city}` : ''} {postal && `• ${postal}`}
                     </div>
                   </>
@@ -2759,41 +3380,79 @@ export default function CrownAdminControlTower() {
               })()}
             </div>
 
-            <div className="p-3 bg-black/60 rounded-xl border border-white/5 space-y-2 max-h-40 overflow-y-auto">
-              <div className="text-gray-500 text-[10px] uppercase font-bold">Purchased Loadouts</div>
-              {(selectedOrderDetails.order_items || []).map((item, idx) => {
-                const img = getOrderItemImage(item);
-                return (
-                  <div key={idx} className="flex justify-between items-center text-xs text-white">
-                    <div className="flex items-center gap-2">
-                      {img ? (
-                        <img src={img} className="w-7 h-7 object-contain bg-black rounded p-0.5 border border-white/10" />
-                      ) : (
-                        <div className="w-7 h-7 flex items-center justify-center bg-black rounded p-0.5 border border-white/10 text-gray-500">
-                          <ImageIcon className="w-4 h-4" />
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="p-3 bg-slate-50 border-b border-slate-200 text-slate-400 text-[10px] uppercase font-bold">Items</div>
+              <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                {(selectedOrderDetails.order_items || []).map((item, idx) => {
+                  const img = getOrderItemImage(item);
+                  const qty = item.quantity || 1;
+                  const unit = Number(item.unit_price || 0);
+                  return (
+                    <div key={idx} className="flex justify-between items-center text-xs text-slate-900 p-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {img ? (
+                          <img src={img} className="w-8 h-8 object-contain bg-slate-50 rounded p-0.5 border border-slate-200 shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 flex items-center justify-center bg-slate-50 rounded p-0.5 border border-slate-200 text-slate-400 shrink-0">
+                            <ImageIcon className="w-4 h-4" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{item.product_name || item.product_variants?.products?.name || 'Item'}</div>
+                          <div className="text-[10px] text-slate-400">{item.color || item.product_variants?.color || '—'} / {item.size || item.product_variants?.size || '—'} × {qty} @ ${unit.toFixed(2)}</div>
                         </div>
-                      )}
-                      <span>{item.product_name || item.product_variants?.products?.name || 'Equipment'} (x{item.quantity || 1})</span>
+                      </div>
+                      <span className="font-bold shrink-0">${(unit * qty).toFixed(2)}</span>
                     </div>
-                    <span className="font-bold">${item.unit_price || 150}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+                {(selectedOrderDetails.order_items || []).length === 0 && (
+                  <div className="p-3 text-slate-400">No line items recorded.</div>
+                )}
+              </div>
             </div>
 
-            <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
-              <span className="text-gray-400 text-[10px] uppercase">Stripe Payment Status</span>
-              <span className={`px-2.5 py-0.5 rounded text-[10px] uppercase font-bold ${
-                selectedOrderDetails.payment_status === 'paid' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+            <div className="space-y-1 text-slate-600">
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span>${Number(selectedOrderDetails.subtotal ?? selectedOrderDetails.total_amount ?? selectedOrderDetails.total ?? 0).toFixed(2)}</span>
+              </div>
+              {Number(selectedOrderDetails.shipping_cost) > 0 && (
+                <div className="flex justify-between">
+                  <span>Shipping</span>
+                  <span>${Number(selectedOrderDetails.shipping_cost).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(selectedOrderDetails.discount_amount) > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Discount</span>
+                  <span>-${Number(selectedOrderDetails.discount_amount).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <span className="text-slate-400 text-[10px] uppercase">Payment Status</span>
+              <span className={`px-2.5 py-0.5 rounded text-[10px] uppercase font-bold border ${
+                selectedOrderDetails.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                selectedOrderDetails.payment_status === 'failed' ? 'bg-red-50 text-red-600 border-red-200' :
+                'bg-amber-50 text-amber-600 border-amber-200'
               }`}>
-                {selectedOrderDetails.payment_status || 'unpaid'}
+                {selectedOrderDetails.payment_status || 'pending'}
               </span>
             </div>
 
-            <div className="flex justify-between text-sm font-bold border-t border-white/10 pt-3 text-white">
+            <div className="flex justify-between text-sm font-bold border-t border-slate-200 pt-3 text-slate-900">
               <span>Total Amount</span>
-              <span className="text-[#CCFF00]">${Number(selectedOrderDetails.total_amount ?? selectedOrderDetails.total ?? 0).toFixed(2)}</span>
+              <span className="text-blue-600">${Number(selectedOrderDetails.total_amount ?? selectedOrderDetails.total ?? 0).toFixed(2)}</span>
             </div>
+
+            <button
+              onClick={() => generateInvoicePdf(selectedOrderDetails)}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <FileText className="w-4 h-4" /> Download PDF Invoice
+            </button>
           </div>
         </div>
       )}
@@ -2951,6 +3610,77 @@ export default function CrownAdminControlTower() {
                 Save Article Changes
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────── */}
+      {/* MANAGE COLLECTION PRODUCTS MODAL                            */}
+      {/* ─────────────────────────────────────────────────────────── */}
+      {manageCollectionModal && (
+        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white max-w-lg w-full rounded-3xl border border-slate-200 p-6 shadow-xl relative text-xs max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-4 mb-4">
+              <div>
+                <span className="font-bold text-slate-900 text-sm">{manageCollectionModal.name}</span>
+                <p className="text-slate-400 text-[10px] mt-0.5">Select which products belong in this collection.</p>
+              </div>
+              <button onClick={closeManageCollection} className="text-slate-400 hover:text-slate-900">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={collectionProductSearch}
+              onChange={(e) => setCollectionProductSearch(e.target.value)}
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 outline-none focus:border-blue-500 mb-3"
+            />
+
+            <div className="flex-1 overflow-y-auto space-y-1.5">
+              {collectionProductsLoading ? (
+                <p className="text-slate-400 text-center py-6">Loading...</p>
+              ) : (
+                products
+                  .filter((p) => p.name?.toLowerCase().includes(collectionProductSearch.toLowerCase()))
+                  .map((p) => {
+                    const isMember = collectionProductIds.includes(p.id);
+                    const img = p.product_images?.[0]?.url;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => handleToggleCollectionProduct(p.id, isMember)}
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-colors ${
+                          isMember ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {img ? (
+                          <img src={img} className="w-9 h-9 object-contain bg-slate-50 rounded-lg border border-slate-200 p-0.5 shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-400 shrink-0">
+                            <ImageIcon className="w-4 h-4" />
+                          </div>
+                        )}
+                        <span className="flex-1 font-semibold text-slate-900 truncate">{p.name}</span>
+                        <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${isMember ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                          {isMember && <Check className="w-3.5 h-3.5 text-white" />}
+                        </span>
+                      </button>
+                    );
+                  })
+              )}
+              {!collectionProductsLoading && products.length === 0 && (
+                <p className="text-slate-400 text-center py-6">No products yet — add one in Products & Wizard first.</p>
+              )}
+            </div>
+
+            <button
+              onClick={closeManageCollection}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase tracking-wider rounded-xl transition-colors mt-4 shrink-0"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
