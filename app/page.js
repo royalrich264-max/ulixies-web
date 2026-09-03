@@ -387,9 +387,11 @@ function HomeContent() {
     return true;
   });
 
-  const currentCategoryActivities = activityDivisions
-    .filter((d) => d.primary_category === SUB_TO_PRIMARY_CATEGORY[activeSub])
-    .map((d) => d.name);
+  const currentCategoryActivities = Array.from(new Set(
+    activityDivisions
+      .filter((d) => (activeDept === 'all' || d.department === activeDept) && d.primary_category === SUB_TO_PRIMARY_CATEGORY[activeSub])
+      .map((d) => d.name)
+  ));
 
   const subNavTabs = [
     { id: 'all', label: 'All Articles', icon: Layers },

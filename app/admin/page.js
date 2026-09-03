@@ -371,20 +371,26 @@ export default function CrownAdminControlTower() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Sync Category to Activity Divisions (admin-managed, DB-backed)
-  const getDivisionsForCategory = (cat) => activityDivisions.filter((d) => d.primary_category === cat);
+  // Sync Department + Category to Activity Divisions (admin-managed, DB-backed, per-department)
+  const getDivisionsForCategory = (dept, cat) => activityDivisions.filter((d) => d.department === dept && d.primary_category === cat);
 
   const handlePrimaryCatChange = (cat) => {
     setWizPrimaryCat(cat);
-    const availableActs = getDivisionsForCategory(cat);
+    const availableActs = getDivisionsForCategory(wizDept, cat);
     setWizActivity(availableActs[0]?.name || '');
   };
 
-  const handleAddDivision = async (cat) => {
+  const handleDeptChange = (dept) => {
+    setWizDept(dept);
+    const availableActs = getDivisionsForCategory(dept, wizPrimaryCat);
+    setWizActivity(availableActs[0]?.name || '');
+  };
+
+  const handleAddDivision = async (dept, cat) => {
     const trimmed = newDivisionName.trim();
     if (!trimmed) return;
     try {
-      await createActivityDivision(cat, trimmed);
+      await createActivityDivision(dept, cat, trimmed);
       setNewDivisionName('');
       const divisions = await getActivityDivisions();
       setActivityDivisions(divisions || []);
@@ -1074,9 +1080,11 @@ export default function CrownAdminControlTower() {
     return orderItemsWithCustomers.filter((r) => invMatchesFilters(r.department, r.primaryCategory, r.subcategory));
   }, [orderItemsWithCustomers, invDeptFilter, invCategoryFilter, invActivityFilter]);
 
-  const invActivityOptions = invCategoryFilter === 'all'
-    ? Array.from(new Set(activityDivisions.map((d) => d.name)))
-    : activityDivisions.filter((d) => d.primary_category === invCategoryFilter).map((d) => d.name);
+  const invActivityOptions = Array.from(new Set(
+    activityDivisions
+      .filter((d) => (invDeptFilter === 'all' || d.department === invDeptFilter) && (invCategoryFilter === 'all' || d.primary_category === invCategoryFilter))
+      .map((d) => d.name)
+  ));
 
   // Real 7-Day Revenue Plotting
   const last7Days = Array.from({ length: 7 }).map((_, i) => {
@@ -1696,7 +1704,7 @@ export default function CrownAdminControlTower() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-gray-400 block mb-1 uppercase">Target Department *</label>
-                      <select value={wizDept} onChange={(e) => setWizDept(e.target.value)} className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none">
+                      <select value={wizDept} onChange={(e) => handleDeptChange(e.target.value)} className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none">
                         <option value="men">Men's Department</option>
                         <option value="women">Women's Department</option>
                         <option value="kids">Kids' Division</option>
@@ -1717,8 +1725,8 @@ export default function CrownAdminControlTower() {
                     <div>
                       <label className="text-gray-400 block mb-1 uppercase">Specific Activity / Division *</label>
                       <select value={wizActivity} onChange={(e) => setWizActivity(e.target.value)} className="w-full p-3 bg-black border border-white/10 rounded-xl text-white outline-none">
-                        {getDivisionsForCategory(wizPrimaryCat).length === 0 && <option value="">No divisions yet — add one below</option>}
-                        {getDivisionsForCategory(wizPrimaryCat).map((d) => (
+                        {getDivisionsForCategory(wizDept, wizPrimaryCat).length === 0 && <option value="">No divisions yet — add one below</option>}
+                        {getDivisionsForCategory(wizDept, wizPrimaryCat).map((d) => (
                           <option key={d.id} value={d.name}>{d.name}</option>
                         ))}
                       </select>
@@ -1731,10 +1739,10 @@ export default function CrownAdminControlTower() {
 
                   <div className="p-3 bg-black/40 border border-white/10 rounded-xl space-y-2">
                     <label className="text-gray-400 block uppercase text-[10px]">
-                      Manage "{wizPrimaryCat}" Divisions <span className="normal-case text-gray-600">(shared across every department)</span>
+                      Manage "{wizDept} / {wizPrimaryCat}" Divisions <span className="normal-case text-gray-600">(this department only)</span>
                     </label>
                     <div className="flex flex-wrap gap-1.5">
-                      {getDivisionsForCategory(wizPrimaryCat).map((d) => (
+                      {getDivisionsForCategory(wizDept, wizPrimaryCat).map((d) => (
                         <span key={d.id} className="flex items-center gap-1 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] text-gray-300">
                           {d.name}
                           <button type="button" onClick={() => handleDeleteDivision(d)} className="text-gray-500 hover:text-red-400">
@@ -1742,8 +1750,8 @@ export default function CrownAdminControlTower() {
                           </button>
                         </span>
                       ))}
-                      {getDivisionsForCategory(wizPrimaryCat).length === 0 && (
-                        <span className="text-gray-600 text-[10px]">No divisions for this category yet.</span>
+                      {getDivisionsForCategory(wizDept, wizPrimaryCat).length === 0 && (
+                        <span className="text-gray-600 text-[10px]">No divisions for this department/category yet.</span>
                       )}
                     </div>
                     <div className="flex gap-2">
@@ -1751,11 +1759,11 @@ export default function CrownAdminControlTower() {
                         type="text"
                         value={newDivisionName}
                         onChange={(e) => setNewDivisionName(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDivision(wizPrimaryCat); } }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDivision(wizDept, wizPrimaryCat); } }}
                         placeholder="e.g. Yoga & Recovery"
                         className="flex-1 p-2 bg-black border border-white/10 rounded-lg text-[11px] text-white outline-none"
                       />
-                      <button type="button" onClick={() => handleAddDivision(wizPrimaryCat)} className="px-3 py-2 bg-[#CCFF00] text-black font-bold text-[10px] uppercase rounded-lg">
+                      <button type="button" onClick={() => handleAddDivision(wizDept, wizPrimaryCat)} className="px-3 py-2 bg-[#CCFF00] text-black font-bold text-[10px] uppercase rounded-lg">
                         Add Division
                       </button>
                     </div>

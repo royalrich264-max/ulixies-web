@@ -37,7 +37,7 @@ export default function RootLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hoveredDept, setHoveredDept] = useState(null);
   const [deptData, setDeptData] = useState({});
-  const [divisionActivities, setDivisionActivities] = useState({ shoes: [], clothing: [], accessories: [] });
+  const [activityDivisions, setActivityDivisions] = useState([]);
   const [announcementBar, setAnnouncementBar] = useState('');
   const [siteSettings, setSiteSettings] = useState({ store_name: 'ULIXIES RESELLER CORP', contact_email: '', phone: '' });
 
@@ -90,11 +90,7 @@ export default function RootLayout({ children }) {
         setDeptData(compiled);
 
         const divisions = await getActivityDivisions();
-        setDivisionActivities({
-          shoes: divisions.filter(d => d.primary_category === 'shoes').map(d => d.name),
-          clothing: divisions.filter(d => d.primary_category === 'clothing').map(d => d.name),
-          accessories: divisions.filter(d => d.primary_category === 'accessories').map(d => d.name),
-        });
+        setActivityDivisions(divisions || []);
       } catch (e) {
         console.error('Header data load error:', e);
       }
@@ -157,6 +153,14 @@ export default function RootLayout({ children }) {
 
   const activeMegaDept = navDepartments.find((d) => d.id === hoveredDept);
   const megaDeptQuery = hoveredDept && hoveredDept !== 'all' ? `dept=${hoveredDept}&` : '';
+
+  const getMegaMenuDivisions = (primaryCategory) => {
+    if (!activeMegaDept) return [];
+    const rows = activeMegaDept.id === 'all'
+      ? activityDivisions.filter((d) => d.primary_category === primaryCategory)
+      : activityDivisions.filter((d) => d.department === activeMegaDept.id && d.primary_category === primaryCategory);
+    return Array.from(new Set(rows.map((d) => d.name)));
+  };
 
   return (
     <html lang="en">
@@ -262,7 +266,7 @@ export default function RootLayout({ children }) {
                   <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Shoes</h4>
                   <div className="flex flex-col gap-2.5 text-[13px] font-medium">
                     <Link href={`/?${megaDeptQuery}sub=shoes`} className="text-gray-500 hover:text-black hover:underline w-fit">All Shoes</Link>
-                    {divisionActivities.shoes.map((act) => (
+                    {getMegaMenuDivisions('shoes').map((act) => (
                       <Link key={act} href={`/?${megaDeptQuery}sub=shoes&activity=${encodeURIComponent(act)}`} className="text-gray-500 hover:text-black hover:underline w-fit">
                         {act}
                       </Link>
@@ -274,7 +278,7 @@ export default function RootLayout({ children }) {
                   <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Clothing</h4>
                   <div className="flex flex-col gap-2.5 text-[13px] font-medium">
                     <Link href={`/?${megaDeptQuery}sub=clothes`} className="text-gray-500 hover:text-black hover:underline w-fit">All Clothing</Link>
-                    {divisionActivities.clothing.map((act) => (
+                    {getMegaMenuDivisions('clothing').map((act) => (
                       <Link key={act} href={`/?${megaDeptQuery}sub=clothes&activity=${encodeURIComponent(act)}`} className="text-gray-500 hover:text-black hover:underline w-fit">
                         {act}
                       </Link>
@@ -286,7 +290,7 @@ export default function RootLayout({ children }) {
                   <h4 className="font-black text-xs uppercase tracking-wider text-black mb-4">Accessories</h4>
                   <div className="flex flex-col gap-2.5 text-[13px] font-medium">
                     <Link href={`/?${megaDeptQuery}sub=accessories`} className="text-gray-500 hover:text-black hover:underline w-fit">All Accessories</Link>
-                    {divisionActivities.accessories.map((act) => (
+                    {getMegaMenuDivisions('accessories').map((act) => (
                       <Link key={act} href={`/?${megaDeptQuery}sub=accessories&activity=${encodeURIComponent(act)}`} className="text-gray-500 hover:text-black hover:underline w-fit">
                         {act}
                       </Link>

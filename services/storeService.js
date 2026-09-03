@@ -558,10 +558,10 @@ export async function getActivityDivisions() {
   return data || [];
 }
 
-export async function createActivityDivision(primary_category, name) {
+export async function createActivityDivision(department, primary_category, name) {
   const { data, error } = await supabase
     .from('activity_divisions')
-    .insert({ primary_category, name: name.trim() })
+    .insert({ department, primary_category, name: name.trim() })
     .select()
     .single();
   if (error) throw error;
