@@ -10,6 +10,8 @@ const SUPABASE_INTENT_URL =
   'https://zofzrpigxontxfoedazx.supabase.co/functions/v1/create-unified-payment-intent-index-ts';
 
 export default function CheckoutPage() {
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
   const [cart, setCart] = useState({ items: [] });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -50,7 +52,7 @@ export default function CheckoutPage() {
     return acc + price * item.quantity;
   }, 0);
 
-  const displaySubtotal = subtotal > 0 ? subtotal : 165.0;
+  const displaySubtotal = subtotal;
   const shippingCost = form.shippingSpeed === 'express'
     ? Number(shippingRules.express_rate) || 0
     : (displaySubtotal >= Number(shippingRules.free_threshold || 0) ? 0 : Number(shippingRules.standard_rate) || 0);
@@ -80,14 +82,41 @@ export default function CheckoutPage() {
     setCouponMessage('');
   };
 
-  // 1. Initial Load: Load Cart & create the Stripe PaymentIntent — runs once on mount.
+  // 0. Require a logged-in account before touching checkout at all — orders can only be
+  // created for a guest (user_id null) or the logged-in owner (RLS enforces this at the
+  // database level too), and guest checkout was producing confusing RLS failures.
+  useEffect(() => {
+    getCurrentUser().then((user) => {
+      if (!user) {
+        router.replace(
+          `/login?notice=${encodeURIComponent('Please log in to complete checkout.')}&redirect=${encodeURIComponent('/checkout')}`
+        );
+        return;
+      }
+      setAuthorized(true);
+      setAuthChecked(true);
+    });
+  }, []);
+
+  // 1. Initial Load: Load Cart & create the Stripe PaymentIntent — runs once authorized.
   // The amount is computed here from freshly-fetched cart/shipping data, not from the
   // component's `finalTotal`, which still reflects the previous render at this point.
   useEffect(() => {
+    if (!authorized) return;
+
     async function initCheckout() {
       try {
         const data = await getCart();
         setCart(data || { items: [] });
+
+        // Never create a PaymentIntent or fake an order for an empty cart — this used
+        // to silently fall back to a hardcoded $165 "Air Max Pulse 26" placeholder,
+        // which meant a customer with an empty/stale cart could actually be charged
+        // for a product that didn't exist in their order.
+        if (!data?.items || data.items.length === 0) {
+          setLoading(false);
+          return;
+        }
 
         const savedShippingRules = await getStoreSettings('shipping_rules');
         const effectiveShippingRules = savedShippingRules
@@ -117,7 +146,7 @@ export default function CheckoutPage() {
             ?? 0;
           return acc + price * item.quantity;
         }, 0);
-        const openingSubtotal = rawSubtotal > 0 ? rawSubtotal : 165.0;
+        const openingSubtotal = rawSubtotal;
         const openingShipping = form.shippingSpeed === 'express'
           ? Number(effectiveShippingRules.express_rate) || 0
           : (openingSubtotal >= Number(effectiveShippingRules.free_threshold || 0) ? 0 : Number(effectiveShippingRules.standard_rate) || 0);
@@ -206,7 +235,7 @@ export default function CheckoutPage() {
     }
 
     initCheckout();
-  }, []);
+  }, [authorized]);
 
   // 2. Keep the existing PaymentIntent's amount in sync when shipping speed or a coupon
   // changes the total after the initial load. Updates the same PaymentIntent in place
@@ -335,6 +364,21 @@ export default function CheckoutPage() {
     return (
       <div className="p-16 text-center font-mono text-xs uppercase tracking-widest text-gray-500">
         INITIALIZING SECURE STRIPE GATEWAY...
+      </div>
+    );
+  }
+
+  if (itemsList.length === 0) {
+    return (
+      <div className="max-w-xl mx-auto px-6 py-20 text-center">
+        <h1 className="text-2xl font-black uppercase tracking-tight">Your Cart Is Empty</h1>
+        <p className="text-sm text-gray-600 mt-2">Add something to your bag before checking out.</p>
+        <a
+          href="/shop"
+          className="inline-block mt-8 px-6 py-3 bg-[#111111] text-white rounded-full text-xs font-bold uppercase hover:bg-gray-800 transition-colors"
+        >
+          Browse the Archive
+        </a>
       </div>
     );
   }
@@ -480,21 +524,24 @@ export default function CheckoutPage() {
                       (item.product_variants?.price_override ??
                         item.product_variants?.products?.sale_price ??
                         item.product_variants?.products?.base_price ??
-                        165) * item.quantity
+                        0) * item.quantity
                     ).toFixed(2)}
                   </span>
                 </div>
               ))
             ) : (
-              <div className="flex justify-between items-center text-xs">
-                <div>
-                  <p className="font-bold">Air Max Pulse 26</p>
-                  <p className="text-gray-500 font-mono">Size: US 10 x 1</p>
-                </div>
-                <span className="font-mono font-bold">$165.00</span>
+              <div className="text-xs text-gray-500 text-center py-6">
+                Your cart is empty.
               </div>
             )}
           </div>
+
+          {itemsList.length === 0 && !loading && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-800">
+              There's nothing in your cart to check out.{' '}
+              <a href="/shop" className="font-bold underline">Go pick something out</a>.
+            </div>
+          )}
 
           <div className="border-t border-[#E5E5E5] pt-4">
             {appliedCoupon ? (

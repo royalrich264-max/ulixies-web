@@ -28,6 +28,17 @@ export async function signOutUser() {
   if (error) throw error;
 }
 
+export async function requestPasswordReset(email) {
+  const redirectTo = `${window.location.origin}/reset-password`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+}
+
+export async function updateUserPassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
 // ================= STORAGE & MEDIA =================
 export async function uploadProductImage(file) {
   const fileExt = file.name.split('.').pop();
