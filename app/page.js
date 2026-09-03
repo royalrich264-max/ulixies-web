@@ -41,31 +41,26 @@ const HERO_BANNER_CONFIG = {
       badge: "ULIXIES // PERFORMANCE ARCHIVE",
       headline: "ENGINEERED FOR THE APEX ATHLETE",
       desc: "Explore dynamic 360° footwear rotations, reactive cushion matrices, and competition gear.",
-      img: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1600&q=80"
     },
     shoes: {
       badge: "INNOVATION // DUAL ZOOM AIR",
       headline: "ELITE FOOTWEAR MATRIX",
       desc: "Responsive cushioning, high-traction outsoles, and carbon energy return plates.",
-      img: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1600&q=80"
     },
     clothes: {
       badge: "TEXTILE // DRI-FIT COMPRESSION",
       headline: "TECHNICAL APPAREL & APEX WEAR",
       desc: "Aerodynamic workout tops, thermal fleece hoodies, and lightweight training shorts.",
-      img: "https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&w=1600&q=80"
     },
     accessories: {
       badge: "LOGISTICS // TRAINING PACKS & GEAR",
       headline: "EQUIPMENT & PERFORMANCE UTILITY",
       desc: "High-density gym bags, grip straps, technical headwear, and reinforced training socks.",
-      img: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=1600&q=80"
     },
     sale: {
       badge: "LIMITED // CLEARANCE ARCHIVE",
       headline: "END-OF-SEASON PERFORMANCE SALE",
       desc: "Exclusive markdowns on competition footwear, technical apparel, and training equipment.",
-      img: "https://images.unsplash.com/photo-1483721074577-09418659d899?auto=format&fit=crop&w=1600&q=80"
     }
   },
   men: {
@@ -73,31 +68,26 @@ const HERO_BANNER_CONFIG = {
       badge: "MEN'S DIVISION // APEX LOADOUT",
       headline: "MEN'S PERFORMANCE ARCHIVE",
       desc: "Engineered high-durability silhouettes, powerlifting apparel, and marathon trainers.",
-      img: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1600&q=80"
     },
     shoes: {
       badge: "MEN'S FOOTWEAR // DUAL ZOOM AIR",
       headline: "MEN'S PERFORMANCE SHOES",
       desc: "Precision stability for heavy lifting, high-impact running, and basketball dominance.",
-      img: "https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=1600&q=80"
     },
     clothes: {
       badge: "MEN'S APPAREL // COMPRESSION MATRIX",
       headline: "MEN'S TRAINING & GYM APPAREL",
       desc: "Sweat-wicking muscle tees, structured track pants, and breathable competition shorts.",
-      img: "https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&w=1600&q=80"
     },
     accessories: {
       badge: "MEN'S GEAR // REINFORCED LOADOUT",
       headline: "MEN'S PERFORMANCE ACCESSORIES",
       desc: "Heavy-duty lifting straps, modular gym duffels, and breathable workout headbands.",
-      img: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=1600&q=80"
     },
     sale: {
       badge: "MEN'S VAULT // UP TO 50% OFF",
       headline: "MEN'S ARCHIVAL CLEARANCE",
       desc: "Discounted men's footwear, lightweight outerwear, and performance bundles.",
-      img: "https://images.unsplash.com/photo-1483721074577-09418659d899?auto=format&fit=crop&w=1600&q=80"
     }
   },
   women: {
@@ -105,31 +95,26 @@ const HERO_BANNER_CONFIG = {
       badge: "WOMEN'S DIVISION // SPEED & FLOW",
       headline: "WOMEN'S ATHLETIC ARCHIVE",
       desc: "Ultra-responsive cushioning matrices, four-way stretch activewear, and studio loadouts.",
-      img: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1600&q=80"
     },
     shoes: {
       badge: "WOMEN'S FOOTWEAR // REACT MATRIX",
       headline: "WOMEN'S RUNNING & GYM SHOES",
       desc: "Lightweight energy return footwear built for distance speed and studio training.",
-      img: "https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&w=1600&q=80"
     },
     clothes: {
       badge: "WOMEN'S APPAREL // SEAMLESS STRETCH",
       headline: "WOMEN'S ACTIVEWEAR & SETS",
       desc: "High-waist compressive leggings, breathable crop tops, and wind-resistant running jackets.",
-      img: "https://images.unsplash.com/photo-1506152983158-b4a74a01c721?auto=format&fit=crop&w=1600&q=80"
     },
     accessories: {
       badge: "WOMEN'S GEAR // TRAINING PACKS",
       headline: "WOMEN'S ESSENTIAL ACCESSORIES",
       desc: "Compact gym totes, resistance loop sets, cushioned crew socks, and sports bottles.",
-      img: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=1600&q=80"
     },
     sale: {
       badge: "WOMEN'S VAULT // EXCLUSIVE DEALS",
       headline: "WOMEN'S PERFORMANCE CLEARANCE",
       desc: "Seasonal markdowns on road runners, studio leggings, and seasonal jackets.",
-      img: "https://images.unsplash.com/photo-1483721074577-09418659d899?auto=format&fit=crop&w=1600&q=80"
     }
   },
   kids: {
@@ -137,31 +122,26 @@ const HERO_BANNER_CONFIG = {
       badge: "KIDS' DIVISION // FUTURE CHAMPIONS",
       headline: "KIDS' PERFORMANCE GEAR",
       desc: "High-durability play shoes, breathable school sportswear, and youth accessories.",
-      img: "https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&w=1600&q=80"
     },
     shoes: {
       badge: "KIDS' FOOTWEAR // ALL-DAY COMFORT",
       headline: "KIDS' ATHLETIC SHOES & SNEAKERS",
       desc: "Reinforced toe caps, flexible foam soles, and easy slip-on athletic designs.",
-      img: "https://images.unsplash.com/photo-1514989940723-e8e51635b782?auto=format&fit=crop&w=1600&q=80"
     },
     clothes: {
       badge: "KIDS' APPAREL // PLAY-TESTED",
       headline: "KIDS' HOODIES, SHORTS & TEES",
       desc: "Soft moisture-wicking fleece, tracksuits, and everyday sports basics.",
-      img: "https://images.unsplash.com/photo-1503944547468-b655ab41400b?auto=format&fit=crop&w=1600&q=80"
     },
     accessories: {
       badge: "KIDS' GEAR // SCHOOL & SPORTS",
       headline: "KIDS' BACKPACKS & ACCESSORIES",
       desc: "Lightweight school packs, colorful performance socks, and youth headwear.",
-      img: "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=1600&q=80"
     },
     sale: {
       badge: "KIDS' VAULT // VALUE SAVINGS",
       headline: "KIDS' CLEARANCE RELEASES",
       desc: "Markdowns on fast-growing athlete footwear, school sports sets, and gear.",
-      img: "https://images.unsplash.com/photo-1483721074577-09418659d899?auto=format&fit=crop&w=1600&q=80"
     }
   },
   sports: {
@@ -169,31 +149,26 @@ const HERO_BANNER_CONFIG = {
       badge: "SPORTS ARCHIVE // PRO COMPETITION",
       headline: "PRO ATHLETE COMPETITION MATRIX",
       desc: "Tournament-grade football boots, basketball traction soles, and track spikes.",
-      img: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1600&q=80"
     },
     shoes: {
       badge: "SPORTS FOOTWEAR // COMPETITION CLEATS",
       headline: "SPORT-SPECIFIC CLEATS & SHOES",
       desc: "Engineered studs for natural grass, indoor court outsoles, and trail lugs.",
-      img: "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?auto=format&fit=crop&w=1600&q=80"
     },
     clothes: {
       badge: "SPORTS APPAREL // PRO BASELAYERS",
       headline: "COMPETITION KITS & UNIFORMS",
       desc: "Breathable soccer jerseys, basketball tank tops, and running singlets.",
-      img: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1600&q=80"
     },
     accessories: {
       badge: "SPORTS GEAR // MATCHDAY LOGISTICS",
       headline: "MATCHDAY BALLS, BAGS & STRAPS",
       desc: "Competition soccer balls, shin guards, training cones, and gym bottles.",
-      img: "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=1600&q=80"
     },
     sale: {
       badge: "SPORTS VAULT // COMPETITION CLEARANCE",
       headline: "TEAM & PRO GEAR CLEARANCE",
       desc: "End-of-tournament cleats, jerseys, and field equipment markdowns.",
-      img: "https://images.unsplash.com/photo-1483721074577-09418659d899?auto=format&fit=crop&w=1600&q=80"
     }
   }
 };
@@ -414,6 +389,12 @@ function HomeContent() {
       }
     : baseHeroBanner;
 
+  // Real product photo for the hero background — this used to be a hardcoded stock
+  // photo from Unsplash, unrelated to anything actually sold here. heroProduct is the
+  // admin's chosen hero product for the active department (or the newest product as a
+  // fallback), so this always reflects real inventory instead of stock photography.
+  const currentHeroBannerImg = heroProduct?.product_images?.[0]?.url || null;
+
   const heroHasDiscount = heroProduct?.sale_price && Number(heroProduct.sale_price) < Number(heroProduct.base_price);
   const heroDiscountPct = heroHasDiscount ? Math.round(((heroProduct.base_price - heroProduct.sale_price) / heroProduct.base_price) * 100) : null;
 
@@ -471,11 +452,13 @@ function HomeContent() {
 
       {/* 1. DYNAMIC EDITORIAL HERO BANNER */}
       <section className="relative w-full h-[380px] sm:h-[440px] bg-black overflow-hidden flex items-center transition-all duration-500">
-        <img 
-          src={currentHeroBanner.img} 
-          alt={currentHeroBanner.headline} 
-          className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-luminosity scale-105 transition-all duration-700"
-        />
+        {currentHeroBannerImg && (
+          <img
+            src={currentHeroBannerImg}
+            alt={currentHeroBanner.headline}
+            className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-luminosity scale-105 transition-all duration-700"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/60 to-transparent"></div>
 
         <div className="relative max-w-[1440px] mx-auto px-6 w-full text-white z-10">
