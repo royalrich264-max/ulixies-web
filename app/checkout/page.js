@@ -273,14 +273,20 @@ export default function CheckoutPage() {
     syncAmount();
   }, [finalTotal]);
 
-  // Mount Stripe Card Payment Element when elements is ready
+  // Mount Stripe Payment Element once both the Elements instance AND its DOM container
+  // exist. `elements` is set (before an await) while the page is still showing the
+  // loading screen, so the container ref is null on that first pass — depending on
+  // `loading` too guarantees this re-runs once the real form (and the container div)
+  // is actually on the page. The cleanup properly unmounts via Stripe's own API instead
+  // of wiping the DOM by hand, so a re-run never leaves a stale/broken element behind.
   useEffect(() => {
-    if (elements && cardElementMountRef.current) {
-      cardElementMountRef.current.innerHTML = '';
-      const paymentElement = elements.create('payment');
-      paymentElement.mount(cardElementMountRef.current);
-    }
-  }, [elements]);
+    if (!elements || !cardElementMountRef.current) return;
+    const paymentElement = elements.create('payment');
+    paymentElement.mount(cardElementMountRef.current);
+    return () => {
+      paymentElement.unmount();
+    };
+  }, [elements, loading]);
 
   // Creates the order (once) before payment is confirmed, so it exists no matter what
   // happens next — Stripe's webhook needs a real order row to update, and can fire before
