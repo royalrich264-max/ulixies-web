@@ -688,11 +688,15 @@ export async function getAllCustomers() {
 
   if (error) return [];
 
-  const { data: orders } = await supabase.from('orders').select('user_id, total_amount, total, created_at');
+  const { data: orders } = await supabase.from('orders').select('user_id, total_amount, total, payment_status, created_at');
 
   return profiles.map((cust) => {
     const userOrders = (orders || []).filter((o) => o.user_id === cust.id);
-    const totalSpent = userOrders.reduce((acc, o) => acc + Number(o.total_amount ?? o.total ?? 0), 0);
+    // Only orders that actually got paid count toward money spent — a declined card
+    // still leaves an order row behind (payment_status 'failed'/'pending').
+    const totalSpent = userOrders
+      .filter((o) => o.payment_status === 'paid')
+      .reduce((acc, o) => acc + Number(o.total_amount ?? o.total ?? 0), 0);
     const lastOrder = userOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
 
     return {

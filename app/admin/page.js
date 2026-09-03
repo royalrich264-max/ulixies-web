@@ -1008,17 +1008,23 @@ export default function CrownAdminControlTower() {
     return '';
   };
 
-  // Metrics Calculations: Total Revenue accurately computes all transactions (including $1 test charges)
-  const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total_amount ?? o.total ?? 0), 0);
+  // Metrics Calculations: Revenue must only count orders that actually got paid — a
+  // declined/insufficient-funds card still creates an order row (payment_status: 'failed'
+  // or 'pending'), and counting that toward revenue would report money that was never
+  // actually charged.
+  const paidOrders = orders.filter(o => o.payment_status === 'paid');
+  const totalRevenue = paidOrders.reduce((sum, o) => sum + Number(o.total_amount ?? o.total ?? 0), 0);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const todayOrders = orders.filter(o => new Date(o.created_at) >= startOfToday);
-  const todayRevenue = todayOrders.reduce((sum, o) => sum + Number(o.total_amount ?? o.total ?? 0), 0);
+  const todayPaidOrders = paidOrders.filter(o => new Date(o.created_at) >= startOfToday);
+  const todayRevenue = todayPaidOrders.reduce((sum, o) => sum + Number(o.total_amount ?? o.total ?? 0), 0);
 
   const monthOrders = orders.filter(o => new Date(o.created_at) >= startOfMonth);
-  const monthRevenue = monthOrders.reduce((sum, o) => sum + Number(o.total_amount ?? o.total ?? 0), 0);
+  const monthPaidOrders = paidOrders.filter(o => new Date(o.created_at) >= startOfMonth);
+  const monthRevenue = monthPaidOrders.reduce((sum, o) => sum + Number(o.total_amount ?? o.total ?? 0), 0);
 
   const lowStockUnits = inventory.filter(v => (v.stock || 0) <= 5 && (v.stock || 0) > 0).length;
   const outOfStockUnits = inventory.filter(v => (v.stock || 0) <= 0).length;
@@ -1093,7 +1099,7 @@ export default function CrownAdminControlTower() {
     const dayStr = d.toISOString().slice(0, 10);
     const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
 
-    const dayTotal = orders
+    const dayTotal = paidOrders
       .filter(o => o.created_at && o.created_at.startsWith(dayStr))
       .reduce((sum, o) => sum + Number(o.total_amount ?? o.total ?? 0), 0);
 
@@ -1103,7 +1109,7 @@ export default function CrownAdminControlTower() {
   const maxDayRevenue = Math.max(...last7Days.map(d => d.total), 100);
 
   // Department Revenue Breakdown
-  const deptRevenue = orders.reduce((acc, o) => {
+  const deptRevenue = paidOrders.reduce((acc, o) => {
     (o.order_items || []).forEach(item => {
       const prod = products.find(p => p.name === item.product_name || p.id === item.product_variants?.products?.id);
       const dept = prod?.department || 'men';
@@ -1447,7 +1453,7 @@ export default function CrownAdminControlTower() {
                     <TrendingUp className="w-4 h-4 text-emerald-500" />
                   </div>
                   <div className="text-3xl font-black text-slate-900">${todayRevenue.toFixed(2)}</div>
-                  <div className="text-[10px] text-slate-400 mt-2">{todayOrders.length} orders today</div>
+                  <div className="text-[10px] text-slate-400 mt-2">{todayPaidOrders.length} paid orders today</div>
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
