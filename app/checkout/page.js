@@ -28,11 +28,11 @@ export default function CheckoutPage() {
   const router = useRouter();
 
   const [form, setForm] = useState({
-    name: 'Athlete Customer',
-    email: 'athlete@ulixies.com',
-    address: 'KN 4 Ave, Kigali',
-    city: 'Kigali',
-    postalCode: '00000',
+    name: '',
+    email: '',
+    address: '',
+    city: '',
+    postalCode: '',
     shippingSpeed: 'standard',
   });
 
@@ -58,6 +58,11 @@ export default function CheckoutPage() {
     : (displaySubtotal >= Number(shippingRules.free_threshold || 0) ? 0 : Number(shippingRules.standard_rate) || 0);
   const discountAmount = appliedCoupon?.discountAmount || 0;
   const finalTotal = Math.max(0, displaySubtotal + shippingCost - discountAmount);
+
+  // Real shipping details are required — this form used to ship with fake placeholder
+  // values ("Athlete Customer" / a fake Kigali address) pre-filled into every field, so
+  // a customer who didn't notice and overwrite them had their real order shipped there.
+  const isShippingFormValid = form.name.trim() && form.email.trim() && form.address.trim() && form.city.trim() && form.postalCode.trim();
 
   const handleApplyCoupon = async () => {
     setValidatingCoupon(true);
@@ -333,6 +338,10 @@ export default function CheckoutPage() {
   const handleStandardCardSubmit = async (e) => {
     e.preventDefault();
     if (!stripeObj || !elements || !clientSecret) return;
+    if (!isShippingFormValid) {
+      alert('Please fill in your name, email, and shipping address before paying.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -361,6 +370,10 @@ export default function CheckoutPage() {
   };
 
   const triggerGooglePay = () => {
+    if (!isShippingFormValid) {
+      alert('Please fill in your name, email, and shipping address before paying.');
+      return;
+    }
     if (paymentRequest) {
       paymentRequest.show();
     }
