@@ -1210,6 +1210,7 @@ export async function addToCart(cartId, variantId, quantity = 1, fallbackProduct
       .eq('id', existing.id)
       .select();
     if (error) throw error;
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('cart-updated'));
     return data;
   } else {
     const { data, error } = await supabase
@@ -1217,6 +1218,7 @@ export async function addToCart(cartId, variantId, quantity = 1, fallbackProduct
       .insert({ cart_id: activeCartId, variant_id: activeVariantId, quantity })
       .select();
     if (error) throw error;
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('cart-updated'));
     return data;
   }
 }
@@ -1224,11 +1226,13 @@ export async function addToCart(cartId, variantId, quantity = 1, fallbackProduct
 export async function removeFromCart(itemId) {
   const { error } = await supabase.from('cart_items').delete().eq('id', itemId);
   if (error) throw error;
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('cart-updated'));
 }
 
 export async function clearCart(cartId) {
   const { error } = await supabase.from('cart_items').delete().eq('cart_id', cartId);
   if (error) console.error('Clear cart error:', error);
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('cart-updated'));
 }
 
 // ================= ORDERS =================

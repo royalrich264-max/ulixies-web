@@ -4,6 +4,16 @@ import './globals.css';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
+import { Poppins } from 'next/font/google';
+
+// Bold, rounded, chunky display font — matches the "PLAY MIND GAMES" style reference
+// (thick uniform strokes, rounded terminals) far better than the previous system font
+// stack, especially at the heavy weights already used everywhere (font-black/font-bold).
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800', '900'],
+  variable: '--font-display',
+});
 import {
   getCart,
   getCurrentUser,
@@ -104,6 +114,16 @@ export default function RootLayout({ children }) {
     };
     window.addEventListener('wishlist-updated', handleWishlistUpdate);
 
+    // Header cart badge previously only loaded once on page load — adding an item
+    // from the homepage/product page never told the header to refetch, so the count
+    // silently stayed stale until a full page reload.
+    const handleCartUpdate = async () => {
+      const { items } = await getCart();
+      const totalCart = (items || []).reduce((acc, item) => acc + (item.quantity || 1), 0);
+      setCartCount(totalCart);
+    };
+    window.addEventListener('cart-updated', handleCartUpdate);
+
     const handleClickOutside = (e) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
         setSearchOpen(false);
@@ -113,6 +133,7 @@ export default function RootLayout({ children }) {
 
     return () => {
       window.removeEventListener('wishlist-updated', handleWishlistUpdate);
+      window.removeEventListener('cart-updated', handleCartUpdate);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
@@ -164,7 +185,7 @@ export default function RootLayout({ children }) {
 
   return (
     <html lang="en">
-      <body className="bg-white text-[#111111] antialiased min-h-screen flex flex-col font-sans selection:bg-[#111111] selection:text-white">
+      <body className={`${poppins.className} bg-white text-[#111111] antialiased min-h-screen flex flex-col selection:bg-[#111111] selection:text-white`}>
 
         {/* ANNOUNCEMENT BAR (admin-configurable via Storefront CMS) */}
         {announcementBar && (
