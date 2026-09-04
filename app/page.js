@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import SplashScreen from '@/components/SplashScreen';
+import Reveal from '@/components/Reveal';
 import {
   getHomeProducts,
   getCart,
@@ -430,7 +431,11 @@ function HomeContent() {
               <span className="text-[10px] font-mono text-gray-400">{divisionProducts.length} ITEMS</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {visibleProducts.map((p) => renderProductCard(p, wishlistIds, handleToggleHeart, openSizePickerId, setOpenSizePickerId, handleQuickAdd))}
+              {visibleProducts.map((p, i) => (
+                <Reveal key={p.id} delay={(i % 5) * 60}>
+                  {renderProductCard(p, wishlistIds, handleToggleHeart, openSizePickerId, setOpenSizePickerId, handleQuickAdd)}
+                </Reveal>
+              ))}
             </div>
             {divisionProducts.length > 5 && (
               <button
@@ -454,14 +459,15 @@ function HomeContent() {
       <section className="relative w-full h-[380px] sm:h-[440px] bg-black overflow-hidden flex items-center transition-all duration-500">
         {currentHeroBannerImg && (
           <img
+            key={currentHeroBannerImg}
             src={currentHeroBannerImg}
             alt={currentHeroBanner.headline}
-            className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-luminosity scale-105 transition-all duration-700"
+            className="hero-zoom absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-luminosity"
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/60 to-transparent"></div>
 
-        <div className="relative max-w-[1440px] mx-auto px-6 w-full text-white z-10">
+        <div key={currentHeroBanner.headline} className="fade-in-up relative max-w-[1440px] mx-auto px-6 w-full text-white z-10">
           <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-widest text-[#CCFF00] uppercase mb-3">
             <Crown className="w-4 h-4 text-[#CCFF00]" />
             {currentHeroBanner.badge}
@@ -749,25 +755,26 @@ function HomeContent() {
         <section className="max-w-[1440px] mx-auto px-6 pt-10">
           <h2 className="text-2xl font-black uppercase tracking-tight mb-5">Shop The Drops</h2>
           <div className="flex gap-5 overflow-x-auto pb-2">
-            {collections.map((c) => {
+            {collections.map((c, i) => {
               const cover = c.collection_products?.[0]?.products?.product_images?.[0]?.url;
               const itemCount = c.collection_products?.length || 0;
               return (
-                <Link
-                  key={c.id}
-                  href={`/collections/${c.slug}`}
-                  className="group relative w-64 h-40 shrink-0 rounded-2xl overflow-hidden bg-[#111111] flex items-end p-4"
-                >
-                  {cover ? (
-                    <img src={cover} alt={c.name} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-75 group-hover:scale-105 transition-all duration-300" />
-                  ) : (
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a1a] to-black" />
-                  )}
-                  <div className="relative z-10">
-                    <h3 className="text-white font-black uppercase text-lg leading-tight">{c.name}</h3>
-                    <span className="text-[#CCFF00] text-[11px] font-mono font-bold">{itemCount} item{itemCount === 1 ? '' : 's'}</span>
-                  </div>
-                </Link>
+                <Reveal key={c.id} delay={i * 80} className="shrink-0">
+                  <Link
+                    href={`/collections/${c.slug}`}
+                    className="hover-lift group relative w-64 h-40 shrink-0 rounded-2xl overflow-hidden bg-[#111111] flex items-end p-4 block"
+                  >
+                    {cover ? (
+                      <img src={cover} alt={c.name} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-75 group-hover:scale-105 transition-all duration-500 ease-out" />
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a1a] to-black" />
+                    )}
+                    <div className="relative z-10">
+                      <h3 className="text-white font-black uppercase text-lg leading-tight">{c.name}</h3>
+                      <span className="text-[#CCFF00] text-[11px] font-mono font-bold">{itemCount} item{itemCount === 1 ? '' : 's'}</span>
+                    </div>
+                  </Link>
+                </Reveal>
               );
             })}
           </div>
@@ -906,15 +913,15 @@ function renderProductCard(p, wishlistIds, handleToggleHeart, openSizePickerId, 
   const isPickerOpen = openSizePickerId === p.id;
 
   return (
-    <div key={p.id} className="group flex flex-col justify-between">
-      <div className="bg-[#F5F5F5] rounded-2xl overflow-hidden relative aspect-square flex items-center justify-center mb-3 border border-[#E5E5E5]">
-        
+    <div key={p.id} className="group flex flex-col justify-between hover-lift rounded-2xl">
+      <div className="bg-[#F5F5F5] rounded-2xl overflow-hidden relative aspect-square flex items-center justify-center mb-3 border border-[#E5E5E5] transition-colors duration-300 group-hover:border-[#111111]/20">
+
         <Link href={`/product?slug=${p.slug}`} className="w-full h-full flex items-center justify-center">
           {mainImg ? (
             <img
               src={mainImg}
               alt={p.name}
-              className="w-full h-full object-contain group-hover:scale-105 transition-all duration-300"
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 ease-out"
             />
           ) : (
             <ImageOff className="w-8 h-8 text-gray-300" />
