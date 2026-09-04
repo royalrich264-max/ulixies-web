@@ -29,6 +29,7 @@ export default function CheckoutPage() {
   // flushed to a re-render yet). ensureOrderCreated must read the number through this
   // ref instead, so it always sees the current value no matter which stale closure calls it.
   const activeOrderNumberRef = useRef(null);
+  const checkoutSnapshotRef = useRef({});
   const paymentIntentIdRef = useRef(null);
   const skipFirstAmountSyncRef = useRef(true);
   const router = useRouter();
@@ -69,6 +70,15 @@ export default function CheckoutPage() {
   // values ("Athlete Customer" / a fake Kigali address) pre-filled into every field, so
   // a customer who didn't notice and overwrite them had their real order shipped there.
   const isShippingFormValid = form.name.trim() && form.email.trim() && form.address.trim() && form.city.trim() && form.postalCode.trim();
+
+  // Google Pay's `pr.on('paymentmethod', ...)` callback is registered once inside the
+  // one-time init effect and never rebound, so it permanently closes over whatever these
+  // values were AT THAT MOMENT (an empty cart, a $0 total, a blank form) instead of the
+  // real ones — exactly what caused Google Pay orders to save with no items/details even
+  // though the order_number fix made them get created and matched by the webhook.
+  // ensureOrderCreated reads through this ref (updated every render) so it always sees
+  // current data no matter which stale closure calls it.
+  checkoutSnapshotRef.current = { itemsList, finalTotal, displaySubtotal, shippingCost, discountAmount, form, appliedCoupon, cart };
 
   const handleApplyCoupon = async () => {
     setValidatingCoupon(true);
@@ -305,21 +315,22 @@ export default function CheckoutPage() {
   // the browser gets a chance to do anything post-payment.
   const ensureOrderCreated = async () => {
     if (orderCreationRef.current) return orderCreationRef.current;
+    const snap = checkoutSnapshotRef.current;
     orderCreationRef.current = createOrder({
       order_number: activeOrderNumberRef.current,
       customer: {
-        recipient_name: form.name,
-        email: form.email,
-        street: form.address,
-        city: form.city,
-        postal_code: form.postalCode
+        recipient_name: snap.form.name,
+        email: snap.form.email,
+        street: snap.form.address,
+        city: snap.form.city,
+        postal_code: snap.form.postalCode
       },
-      items: itemsList,
-      total: finalTotal,
-      subtotal: displaySubtotal,
-      shippingCost: shippingCost,
-      shippingSpeed: form.shippingSpeed === 'express' ? 'Express Delivery' : 'Standard Delivery',
-      discountAmount
+      items: snap.itemsList,
+      total: snap.finalTotal,
+      subtotal: snap.displaySubtotal,
+      shippingCost: snap.shippingCost,
+      shippingSpeed: snap.form.shippingSpeed === 'express' ? 'Express Delivery' : 'Standard Delivery',
+      discountAmount: snap.discountAmount
     }).catch((err) => {
       orderCreationRef.current = null;
       throw err;
@@ -330,10 +341,11 @@ export default function CheckoutPage() {
   const handleOrderSuccess = async (order) => {
     setSubmitting(true);
     try {
-      if (appliedCoupon?.coupon?.id && order?.id) {
-        await recordCouponUsage(appliedCoupon.coupon.id, order.id);
+      const snap = checkoutSnapshotRef.current;
+      if (snap.appliedCoupon?.coupon?.id && order?.id) {
+        await recordCouponUsage(snap.appliedCoupon.coupon.id, order.id);
       }
-      if (cart?.id) await clearCart(cart.id);
+      if (snap.cart?.id) await clearCart(snap.cart.id);
       router.push('/orders');
     } catch (err) {
       alert(`Order finalize failed: ${err.message}`);
