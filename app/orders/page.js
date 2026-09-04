@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getUserOrders, getCurrentUser, submitProductReturn, uploadReturnPhoto } from '@/services/storeService';
+import { getUserOrders, getCurrentUser, submitProductReturn, uploadReturnPhoto, getUserReturns } from '@/services/storeService';
 import {
   Package,
   Truck,
@@ -42,6 +42,7 @@ function getItemVariantLabel(item) {
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
+  const [myReturns, setMyReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
 
@@ -62,6 +63,8 @@ export default function OrdersPage() {
         setUser(u);
         const data = await getUserOrders();
         setOrders(data || []);
+        const returnsData = await getUserReturns();
+        setMyReturns(returnsData || []);
       } catch (err) {
         console.error('Failed to load orders:', err);
       } finally {
@@ -124,6 +127,8 @@ export default function OrdersPage() {
       }
 
       setReturnSuccess(true);
+      const returnsData = await getUserReturns();
+      setMyReturns(returnsData || []);
     } catch (err) {
       alert(err.message || 'Error submitting return.');
     } finally {
@@ -161,6 +166,7 @@ export default function OrdersPage() {
             const firstItem = order.order_items?.[0];
             const itemCount = order.order_items?.reduce((acc, i) => acc + (i.quantity || 1), 0) || 1;
             const isDelivered = order.status === 'delivered';
+            const orderReturns = myReturns.filter((r) => r.order_id === order.id);
 
             return (
               <div 
@@ -200,11 +206,43 @@ export default function OrdersPage() {
                       <div className="text-[10px] text-gray-500 font-mono mt-0.5">
                         {itemCount} {itemCount === 1 ? 'item' : 'items'} • Size: {getItemVariantLabel(firstItem)}
                       </div>
-                      <div className="text-[9px] text-gray-400 font-mono">
+      <div className="text-[9px] text-gray-400 font-mono">
                         {new Date(order.created_at).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
+
+                  {/* RETURN STATUS + ADMIN RESPONSE — previously the customer had no way to
+                      ever see this again after submitting a claim. */}
+                  {orderReturns.map((ret) => {
+                    const stageStyles = {
+                      requested: 'bg-gray-100 text-gray-700 border-gray-200',
+                      approved: 'bg-blue-50 text-blue-700 border-blue-200',
+                      return_shipped: 'bg-blue-50 text-blue-700 border-blue-200',
+                      received: 'bg-amber-50 text-amber-700 border-amber-200',
+                      inspection: 'bg-amber-50 text-amber-700 border-amber-200',
+                      refund_approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                      refunded: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                      rejected: 'bg-red-50 text-red-700 border-red-200',
+                    };
+                    const stage = ret.status || 'requested';
+                    return (
+                      <div key={ret.id} className="mb-3 p-2.5 bg-[#F9F9F9] rounded-xl border border-[#E5E5E5] text-[10px] space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold uppercase text-gray-500">Return Status</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${stageStyles[stage] || stageStyles.requested}`}>
+                            {stage.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        {ret.inspection_notes && (
+                          <div className="text-gray-600">
+                            <span className="font-bold text-gray-500">Message from our team: </span>
+                            {ret.inspection_notes}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="pt-2.5 border-t border-[#E5E5E5] flex items-center justify-between gap-2">

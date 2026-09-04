@@ -709,6 +709,18 @@ export async function getAllCustomers() {
 }
 
 // ================= RETURNS ENGINE =================
+export async function getUserReturns() {
+  // RLS already restricts this to the logged-in customer's own returns (matched by
+  // email) — no client-side filter needed, and nothing extra to leak to another user.
+  const { data, error } = await supabase
+    .from('returns')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+  return data || [];
+}
+
 export async function getAllReturns() {
   const { data, error } = await supabase
     .from('returns')
