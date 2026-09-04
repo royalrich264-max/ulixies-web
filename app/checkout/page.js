@@ -23,6 +23,12 @@ export default function CheckoutPage() {
   const [elements, setElements] = useState(null);
   const cardElementMountRef = useRef(null);
   const orderCreationRef = useRef(null);
+  // Google Pay's `pr.on('paymentmethod', ...)` callback is registered once, inside the
+  // one-time init effect, and never rebound — so it permanently closes over whatever
+  // activeOrderNumber was AT THAT MOMENT (still null, since setActiveOrderNumber hadn't
+  // flushed to a re-render yet). ensureOrderCreated must read the number through this
+  // ref instead, so it always sees the current value no matter which stale closure calls it.
+  const activeOrderNumberRef = useRef(null);
   const paymentIntentIdRef = useRef(null);
   const skipFirstAmountSyncRef = useRef(true);
   const router = useRouter();
@@ -142,6 +148,7 @@ export default function CheckoutPage() {
 
         const generatedOrderNumber = `ULX-${Date.now().toString().slice(-6)}`;
         setActiveOrderNumber(generatedOrderNumber);
+        activeOrderNumberRef.current = generatedOrderNumber;
 
         const items = data?.items || [];
         const rawSubtotal = items.reduce((acc, item) => {
@@ -299,7 +306,7 @@ export default function CheckoutPage() {
   const ensureOrderCreated = async () => {
     if (orderCreationRef.current) return orderCreationRef.current;
     orderCreationRef.current = createOrder({
-      order_number: activeOrderNumber,
+      order_number: activeOrderNumberRef.current,
       customer: {
         recipient_name: form.name,
         email: form.email,
