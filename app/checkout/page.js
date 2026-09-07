@@ -37,6 +37,7 @@ export default function CheckoutPage() {
   const [form, setForm] = useState({
     name: '',
     email: '',
+    phone: '',
     address: '',
     city: '',
     postalCode: '',
@@ -69,7 +70,7 @@ export default function CheckoutPage() {
   // Real shipping details are required — this form used to ship with fake placeholder
   // values ("Athlete Customer" / a fake Kigali address) pre-filled into every field, so
   // a customer who didn't notice and overwrite them had their real order shipped there.
-  const isShippingFormValid = form.name.trim() && form.email.trim() && form.address.trim() && form.city.trim() && form.postalCode.trim();
+  const isShippingFormValid = form.name.trim() && form.email.trim() && form.phone.trim() && form.address.trim() && form.city.trim() && form.postalCode.trim();
 
   // Google Pay's `pr.on('paymentmethod', ...)` callback is registered once inside the
   // one-time init effect and never rebound, so it permanently closes over whatever these
@@ -321,6 +322,7 @@ export default function CheckoutPage() {
       customer: {
         recipient_name: snap.form.name,
         email: snap.form.email,
+        phone: snap.form.phone,
         street: snap.form.address,
         city: snap.form.city,
         postal_code: snap.form.postalCode
@@ -358,7 +360,7 @@ export default function CheckoutPage() {
     e.preventDefault();
     if (!stripeObj || !elements || !clientSecret) return;
     if (!isShippingFormValid) {
-      alert('Please fill in your name, email, and shipping address before paying.');
+      alert('Please fill in your name, email, phone number, and shipping address before paying.');
       return;
     }
 
@@ -390,7 +392,7 @@ export default function CheckoutPage() {
 
   const triggerGooglePay = () => {
     if (!isShippingFormValid) {
-      alert('Please fill in your name, email, and shipping address before paying.');
+      alert('Please fill in your name, email, phone number, and shipping address before paying.');
       return;
     }
     if (paymentRequest) {
@@ -443,6 +445,13 @@ export default function CheckoutPage() {
                 placeholder="Email Address"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full px-4 py-3 rounded border border-[#E5E5E5] text-sm focus:border-black outline-none"
+              />
+              <input
+                type="tel"
+                placeholder="Phone Number"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 className="w-full px-4 py-3 rounded border border-[#E5E5E5] text-sm focus:border-black outline-none"
               />
               <input
