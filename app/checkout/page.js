@@ -17,7 +17,7 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [stripeObj, setStripeObj] = useState(null);
   const [paymentRequest, setPaymentRequest] = useState(null);
-  const [canMakeGooglePay, setCanMakeGooglePay] = useState(false);
+  const [walletPayType, setWalletPayType] = useState(null); // 'apple_pay' | 'google_pay' | null
   const [clientSecret, setClientSecret] = useState(null);
   const [activeOrderNumber, setActiveOrderNumber] = useState(null);
   const [elements, setElements] = useState(null);
@@ -217,7 +217,7 @@ export default function CheckoutPage() {
           const result = await pr.canMakePayment();
           if (result) {
             setPaymentRequest(pr);
-            setCanMakeGooglePay(true);
+            setWalletPayType(result.applePay ? 'apple_pay' : result.googlePay ? 'google_pay' : 'other');
 
             pr.on('paymentmethod', async (ev) => {
               let order;
@@ -500,8 +500,21 @@ export default function CheckoutPage() {
           <div>
             <h2 className="text-sm font-bold uppercase tracking-wider mb-3">3. Payment Authorization</h2>
 
-            {/* Official Google Pay Button (Auto-rendered through Stripe Engine) */}
-            {canMakeGooglePay && (
+            {/* Wallet Pay Button (Stripe Payment Request API — renders whichever wallet the device/browser actually supports) */}
+            {walletPayType === 'apple_pay' && (
+              <button
+                type="button"
+                onClick={triggerGooglePay}
+                disabled={submitting}
+                className="w-full py-4 bg-black text-white rounded-full flex items-center justify-center gap-2 hover:bg-gray-800 active:scale-[0.99] transition-all shadow-lg mb-4 cursor-pointer"
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                  <path d="M16.7 0c.1 1.2-.4 2.4-1.1 3.2-.7.9-1.9 1.6-3 1.5-.1-1.2.5-2.4 1.2-3.1C14.6.7 15.7.1 16.7 0zm3.8 8.4c-.1.1-1.8 1-1.8 3.1 0 2.4 2.1 3.3 2.2 3.3 0 .1-.3 1.2-1.1 2.4-.7 1-1.4 2-2.5 2-1.1 0-1.4-.6-2.7-.6-1.3 0-1.7.6-2.7.6-1.1 0-1.9-1-2.6-2-1.6-2.3-2.8-6.5-1.2-9.4.8-1.4 2.2-2.3 3.7-2.3 1.1 0 2.1.7 2.7.7.6 0 1.9-.9 3.2-.8.5 0 2.1.2 3.1 1.6z" />
+                </svg>
+                <span className="text-base font-semibold">Pay</span>
+              </button>
+            )}
+            {walletPayType === 'google_pay' && (
               <button
                 type="button"
                 onClick={triggerGooglePay}
@@ -518,6 +531,16 @@ export default function CheckoutPage() {
                   <span className="text-[#EA4335]">e</span>
                   <span className="text-white ml-1 font-sans">Pay</span>
                 </span>
+              </button>
+            )}
+            {walletPayType === 'other' && (
+              <button
+                type="button"
+                onClick={triggerGooglePay}
+                disabled={submitting}
+                className="w-full py-4 bg-black text-white rounded-full flex items-center justify-center gap-2 hover:bg-gray-800 active:scale-[0.99] transition-all shadow-lg mb-4 cursor-pointer"
+              >
+                <span className="text-base font-semibold">Express Checkout</span>
               </button>
             )}
 
